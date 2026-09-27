@@ -1,0 +1,15 @@
+{
+  "document_id": "doc-template-001",
+  "title": "[DOCUMENT TITLE]",
+  "source_name": "[AUTHORITATIVE SOURCE NAME]",
+  "source_url": "https://example.org/placeholder-source-url",
+  "source_type": "educational_resource",
+  "publisher": "[PUBLISHER NAME]",
+  "publication_date": "2026-01-01T00:00:00Z",
+  "last_reviewed_date": "2026-01-01T00:00:00Z",
+  "language": "en",
+  "topic": "[TOPIC_CATEGORY]",
+  "content": "[PLACEHOLDER FOR APPROVED CURATED PSYCHOEDUCATIONAL CONTENT. DO NOT INSERT INDIVIDUAL USER STATEMENTS OR MEDICAL DIAGNOSES HERE.]",
+  "version": "1.0",
+  "reviewed": false
+}
