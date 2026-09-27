@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, List
-from sqlalchemy import DateTime
+from typing import TYPE_CHECKING, List, Optional
+from sqlalchemy import DateTime, String
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
@@ -20,6 +20,12 @@ class User(Base):
         primary_key=True,
         default=uuid.uuid4,
         nullable=False,
+    )
+    firebase_uid: Mapped[Optional[str]] = mapped_column(
+        String(128),
+        unique=True,
+        index=True,
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

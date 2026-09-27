@@ -9,33 +9,15 @@ from app.models.user import User
 
 
 class ConversationService:
-    """Service handling business logic for conversations and messages."""
+    """Service handling business logic for conversations and messages with user ownership enforcement."""
 
     @staticmethod
     async def create_conversation(
         db: AsyncSession,
-        user_id: Optional[uuid.UUID] = None
+        user: User,
     ) -> Conversation:
-        """Creates a new conversation session for a user.
-        
-        Temporary User Strategy for Sprint 1 (No Authentication):
-        If user_id is provided and exists, use it.
-        If user_id is omitted or does not exist, create a new User record.
-        """
-        target_user: Optional[User] = None
-
-        if user_id is not None:
-            stmt = select(User).where(User.id == user_id)
-            result = await db.execute(stmt)
-            target_user = result.scalar_one_or_none()
-
-        if target_user is None:
-            # Create a temporary user record for Sprint 1 development/testing
-            target_user = User()
-            db.add(target_user)
-            await db.flush()
-
-        conversation = Conversation(user_id=target_user.id)
+        """Creates a new conversation session for an authenticated user."""
+        conversation = Conversation(user_id=user.id)
         db.add(conversation)
         await db.commit()
         await db.refresh(conversation, attribute_names=["messages"])
@@ -44,15 +26,20 @@ class ConversationService:
     @staticmethod
     async def get_conversation_by_id(
         db: AsyncSession,
-        conversation_id: uuid.UUID
+        conversation_id: uuid.UUID,
+        user_id: uuid.UUID,
     ) -> Optional[Conversation]:
-        """Retrieves a conversation by ID with its messages.
+        """Retrieves a conversation by ID for a specific authenticated user.
         
-        Note: User ownership isolation is omitted in Sprint 1 pending Authentication (Phase 4).
+        Enforces user ownership: returns None if the conversation does not exist
+        or belongs to another user.
         """
         stmt = (
             select(Conversation)
-            .where(Conversation.id == conversation_id)
+            .where(
+                Conversation.id == conversation_id,
+                Conversation.user_id == user_id,
+            )
             .options(selectinload(Conversation.messages))
         )
         result = await db.execute(stmt)
@@ -62,15 +49,20 @@ class ConversationService:
     async def add_message_to_conversation(
         db: AsyncSession,
         conversation_id: uuid.UUID,
+        user_id: uuid.UUID,
         role: str,
-        content: str
+        content: str,
     ) -> Optional[Message]:
-        """Adds a new message (user or assistant) to a conversation.
+        """Adds a new message (user or assistant) to an authenticated user's conversation.
         
-        Returns None if the parent conversation does not exist.
+        Enforces user ownership: returns None if the parent conversation does not exist
+        or belongs to another user.
         """
-        # Verify conversation exists
-        conversation_stmt = select(Conversation).where(Conversation.id == conversation_id)
+        # Verify conversation exists and belongs to the authenticated user
+        conversation_stmt = select(Conversation).where(
+            Conversation.id == conversation_id,
+            Conversation.user_id == user_id,
+        )
         conv_result = await db.execute(conversation_stmt)
         conversation = conv_result.scalar_one_or_none()
 

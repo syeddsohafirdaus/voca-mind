@@ -1,7 +1,9 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.auth.dependencies import get_current_user
 from app.database import get_db
+from app.models.user import User
 from app.schemas.conversation import ConversationCreate, ConversationResponse
 from app.schemas.message import MessageCreate, MessageResponse
 from app.services.conversation_service import ConversationService
@@ -15,19 +17,19 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
     summary="Create Conversation",
     description=(
-        "Starts a new conversation session for a user. "
-        "Authentication is NOT implemented in Sprint 1. "
-        "For testing, an optional user_id may be supplied; if omitted, a temporary user record is generated."
+        "Starts a new conversation session for the authenticated user. "
+        "User identity is extracted from the verified Firebase Authorization Bearer token."
     )
 )
 async def create_conversation(
     payload: ConversationCreate = ConversationCreate(),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ConversationResponse:
-    """Delegates conversation creation to ConversationService."""
+    """Creates a conversation bound to the authenticated current user."""
     conversation = await ConversationService.create_conversation(
         db=db,
-        user_id=payload.user_id,
+        user=current_user,
     )
     return ConversationResponse.model_validate(conversation)
 
@@ -39,17 +41,19 @@ async def create_conversation(
     summary="Get Conversation",
     description=(
         "Retrieves a conversation by ID along with its associated messages. "
-        "Note: Ownership checks are omitted in Sprint 1 pending authentication implementation (Phase 4)."
+        "Enforces ownership: users can only access their own conversations."
     )
 )
 async def get_conversation(
     conversation_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ConversationResponse:
-    """Delegates conversation retrieval to ConversationService."""
+    """Retrieves conversation enforcing user ownership."""
     conversation = await ConversationService.get_conversation_by_id(
         db=db,
         conversation_id=conversation_id,
+        user_id=current_user.id,
     )
     if conversation is None:
         raise HTTPException(
@@ -66,18 +70,20 @@ async def get_conversation(
     summary="Add Message to Conversation",
     description=(
         "Adds a new message (role: 'user' or 'assistant') to an existing conversation. "
-        "This endpoint stores the message directly without triggering LLM inference or AI dialogue generation."
+        "Enforces ownership: users can only add messages to their own conversations."
     )
 )
 async def add_message(
     conversation_id: uuid.UUID,
     payload: MessageCreate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> MessageResponse:
-    """Delegates message creation to ConversationService."""
+    """Adds a message enforcing user ownership of the parent conversation."""
     message = await ConversationService.add_message_to_conversation(
         db=db,
         conversation_id=conversation_id,
+        user_id=current_user.id,
         role=payload.role,
         content=payload.content,
     )

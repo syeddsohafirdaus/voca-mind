@@ -8,14 +8,10 @@ from app.schemas.message import MessageResponse
 class ConversationCreate(BaseModel):
     """Schema for initiating a conversation.
     
-    Authentication is not implemented in Sprint 1. 
-    user_id is optional; if omitted, a temporary user ID strategy is used.
+    Authenticated user identity is verified via Firebase Bearer token.
+    Client payloads cannot override user identity.
     """
-
-    user_id: Optional[UUID] = Field(
-        default=None,
-        description="Optional temporary user ID for testing. If omitted, a default dev user is created."
-    )
+    pass
 
 
 class ConversationResponse(BaseModel):
