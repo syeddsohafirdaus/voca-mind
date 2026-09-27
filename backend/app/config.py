@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     FIREBASE_CREDENTIALS_PATH: str | None = None
     FIREBASE_AUTH_EMULATOR_HOST: str | None = None
 
+    # Qdrant Vector Store & Embedding Configuration
+    QDRANT_URL: str = "http://localhost:6333"
+    QDRANT_API_KEY: str | None = None
+    QDRANT_COLLECTION_NAME: str = "voca_mind_knowledge"
+    EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_DIMENSION: int = 1536
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
