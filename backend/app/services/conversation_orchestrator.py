@@ -15,13 +15,13 @@ from app.schemas.orchestrator import (
 DEFAULT_CRISIS_SAFETY_RESPONSE = (
     "I hear how much pain you are experiencing right now, and I want you to be safe. "
     "Because I am an automated wellness system, I cannot provide crisis intervention or emergency medical care. "
-    "Please connect with human emergency support immediately:\n\n"
-    "• In the US/Canada: Call or text 988 (Suicide & Crisis Lifeline), available 24/7, free and confidential.\n"
-    "• Crisis Text Line: Text HOME to 741741 to connect with a crisis counselor.\n"
-    "• In the UK: Call 111 (NHS) or 999 in an emergency.\n"
-    "• International: Contact your local emergency services or visit https://findahelpline.com to find free support in your country.\n\n"
+    "Please connect with human emergency support or a crisis helpline immediately:\n\n"
+    "• International Support: Visit https://findahelpline.com or https://befrienders.org to find free, confidential crisis hotlines in your country.\n"
+    "• Regional Crisis Lines: In the US/Canada, call or text 988 (Suicide & Crisis Lifeline); text HOME to 741741 for the Crisis Text Line; in the UK, call 111 or 999; in the EU, call 112.\n"
+    "• Local Emergency Services: Crisis numbers differ by region. Please contact your local emergency services or visit the nearest emergency medical facility.\n\n"
     "You do not have to carry this alone—please reach out to one of these resources or a trusted professional right away."
 )
+
 
 SAFE_FALLBACK_RESPONSE = (
     "I want to support you, but as an automated wellness assistant, I cannot provide medical diagnoses, "

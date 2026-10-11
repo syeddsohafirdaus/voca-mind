@@ -78,3 +78,47 @@ class ConversationService:
         await db.commit()
         await db.refresh(message)
         return message
+
+    @staticmethod
+    async def persist_turn(
+        db: AsyncSession,
+        conversation_id: uuid.UUID,
+        user_id: uuid.UUID,
+        user_content: str,
+        assistant_content: str,
+    ) -> Optional[tuple[Message, Message]]:
+        """Atomically persists a user message and its generated assistant reply.
+
+        Enforces conversation ownership: returns None if the parent conversation
+        does not exist or belongs to another user.
+        Both messages are committed in a single atomic transaction.
+        """
+        # Verify conversation exists and belongs to the authenticated user
+        conversation_stmt = select(Conversation).where(
+            Conversation.id == conversation_id,
+            Conversation.user_id == user_id,
+        )
+        conv_result = await db.execute(conversation_stmt)
+        conversation = conv_result.scalar_one_or_none()
+
+        if conversation is None:
+            return None
+
+        user_message = Message(
+            conversation_id=conversation_id,
+            role="user",
+            content=user_content,
+        )
+        assistant_message = Message(
+            conversation_id=conversation_id,
+            role="assistant",
+            content=assistant_content,
+        )
+        db.add(user_message)
+        db.add(assistant_message)
+
+        await db.commit()
+        await db.refresh(user_message)
+        await db.refresh(assistant_message)
+
+        return user_message, assistant_message

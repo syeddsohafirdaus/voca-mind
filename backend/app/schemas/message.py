@@ -1,15 +1,20 @@
 from datetime import datetime
-from typing import Literal
+from typing import List, Literal, Optional
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from app.schemas.orchestrator import SourceProvenance
 
 
 class MessageCreate(BaseModel):
-    """Schema for creating a message in a conversation."""
+    """Schema for submitting a message to a conversation.
 
-    role: Literal["user", "assistant"] = Field(
-        ...,
-        description="Message sender role. Must be 'user' or 'assistant'."
+    Clients may only submit 'user' messages. Assistant messages are generated
+    server-side through the orchestrator pipeline.
+    """
+
+    role: Literal["user"] = Field(
+        default="user",
+        description="Message sender role. Clients may only submit 'user' messages."
     )
     content: str = Field(
         ...,
@@ -34,5 +39,17 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     created_at: datetime
+    assistant_reply: Optional["MessageResponse"] = Field(
+        default=None,
+        description="Server-generated assistant response for user dialogue turns."
+    )
+    sources: List[SourceProvenance] = Field(
+        default_factory=list,
+        description="Source provenance of retrieved knowledge chunks if applicable."
+    )
+    is_safety_diverted: bool = Field(
+        default=False,
+        description="Whether the turn bypassed ordinary generation to provide immediate crisis resources."
+    )
 
     model_config = ConfigDict(from_attributes=True)

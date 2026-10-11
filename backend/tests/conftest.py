@@ -44,6 +44,18 @@ async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
 app.dependency_overrides[get_db] = override_get_db
 
 
+class TestFakeRetrievalService:
+    async def retrieve_relevant_chunks(self, query: str, top_k: int = 5, score_threshold: float = 0.0):
+        return []
+
+
+from app.services.conversation_orchestrator import DeterministicFakeResponseGenerator
+from app.services.orchestrator_factory import get_response_generator, get_retrieval_service
+
+app.dependency_overrides[get_retrieval_service] = lambda: TestFakeRetrievalService()
+app.dependency_overrides[get_response_generator] = lambda: DeterministicFakeResponseGenerator()
+
+
 def mock_verify_firebase_id_token(token: str) -> dict:
     """Mock Firebase ID token verification for test environment.
     

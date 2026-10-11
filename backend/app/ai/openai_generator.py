@@ -3,6 +3,9 @@ from app.config import settings
 from app.knowledge.schemas import KnowledgeChunk
 from app.logger import logger
 
+# Private sentinel — distinct from None — used to detect when api_key was NOT supplied
+_UNSET: object = object()
+
 SYSTEM_PROMPT = (
     "You are Voca Mind, a compassionate, supportive, and nonjudgmental emotional wellness companion.\n\n"
     "CRITICAL SAFETY & NON-CLINICAL BOUNDARIES:\n"
@@ -71,14 +74,21 @@ class OpenAIResponseGenerator:
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: object = _UNSET,
         model: Optional[str] = None,
         timeout: Optional[float] = None,
         temperature: float = 0.7,
         max_tokens: int = 600,
         client: Optional[Any] = None,
     ) -> None:
-        self.api_key = api_key if api_key is not None else settings.OPENAI_API_KEY
+        # If the caller explicitly supplies api_key (including None), use it as-is.
+        # If the caller omits api_key entirely, read from settings.
+        # This makes OpenAIResponseGenerator(api_key=None) a guaranteed no-key sentinel
+        # that does NOT re-read settings at runtime.
+        if api_key is _UNSET:
+            self.api_key: Optional[str] = settings.OPENAI_API_KEY
+        else:
+            self.api_key = api_key  # type: ignore[assignment]
         self.model = model if model is not None else settings.OPENAI_CHAT_MODEL
         self.timeout = timeout if timeout is not None else settings.OPENAI_TIMEOUT_SECONDS
         self.temperature = temperature

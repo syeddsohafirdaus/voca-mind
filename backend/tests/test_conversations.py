@@ -49,17 +49,24 @@ async def test_add_user_message(auth_client_user1: AsyncClient):
     assert "id" in data
     assert "created_at" in data
 
-    # Verify message is returned when retrieving conversation
+    # Verify user message and server-generated assistant reply are returned when retrieving conversation
+    assert "assistant_reply" in data
+    assert data["assistant_reply"] is not None
+    assert data["assistant_reply"]["role"] == "assistant"
+
     get_resp = await auth_client_user1.get(f"/api/v1/conversations/{conv_id}")
     assert get_resp.status_code == 200
     conv_data = get_resp.json()
-    assert len(conv_data["messages"]) == 1
+    assert len(conv_data["messages"]) == 2
     assert conv_data["messages"][0]["id"] == data["id"]
+    assert conv_data["messages"][0]["role"] == "user"
+    assert conv_data["messages"][1]["id"] == data["assistant_reply"]["id"]
+    assert conv_data["messages"][1]["role"] == "assistant"
 
 
 @pytest.mark.asyncio
-async def test_add_assistant_message(auth_client_user1: AsyncClient):
-    """Test POST /api/v1/conversations/{id}/messages with assistant role."""
+async def test_reject_client_submitted_assistant_message(auth_client_user1: AsyncClient):
+    """Test POST /api/v1/conversations/{id}/messages rejects client-submitted assistant role."""
     create_resp = await auth_client_user1.post("/api/v1/conversations", json={})
     conv_id = create_resp.json()["id"]
 
@@ -68,11 +75,10 @@ async def test_add_assistant_message(auth_client_user1: AsyncClient):
         "content": "Thank you for sharing that. I am here to listen."
     }
     msg_resp = await auth_client_user1.post(f"/api/v1/conversations/{conv_id}/messages", json=msg_payload)
-    assert msg_resp.status_code == 201
+    assert msg_resp.status_code == 422
     data = msg_resp.json()
-    assert data["conversation_id"] == conv_id
-    assert data["role"] == "assistant"
-    assert data["content"] == "Thank you for sharing that. I am here to listen."
+    assert "error" in data or "detail" in data
+
 
 
 @pytest.mark.asyncio

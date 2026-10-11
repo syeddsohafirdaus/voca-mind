@@ -390,3 +390,52 @@ async def test_no_secrets_or_raw_messages_logged(caplog, mock_openai_client: Asy
     for record in caplog.records:
         assert sensitive_token not in record.message
         assert sensitive_user_text not in record.message
+
+
+# -----------------------------------------------------------------------------
+# api_key sentinel fix tests (Fix 1)
+# -----------------------------------------------------------------------------
+
+def test_explicit_none_api_key_is_not_overridden_by_settings(monkeypatch):
+    """Verify that api_key=None explicitly passed is stored as None, not overridden
+    by settings.OPENAI_API_KEY.  This is the core guarantee of the _UNSET sentinel fix:
+    the factory's OpenAIResponseGenerator(api_key=None) must remain None even when
+    settings carries a real key.
+    """
+    import app.config as cfg
+    monkeypatch.setattr(cfg.settings, "OPENAI_API_KEY", "sk-should-not-be-used")
+    generator = OpenAIResponseGenerator(api_key=None, client=None)
+    assert generator.api_key is None, (
+        "api_key=None must be honoured; settings value must NOT override an explicit None argument"
+    )
+
+
+def test_omitted_api_key_reads_from_settings(monkeypatch):
+    """Verify that when api_key is not supplied at all, the value is read from settings."""
+    import app.config as cfg
+    monkeypatch.setattr(cfg.settings, "OPENAI_API_KEY", "sk-from-settings-12345")
+    generator = OpenAIResponseGenerator()
+    assert generator.api_key == "sk-from-settings-12345"
+
+
+def test_explicit_real_api_key_sealed_at_construction(monkeypatch):
+    """Verify an explicitly supplied real key is stored as-is and subsequent settings
+    mutations cannot change it (the sentinel does not re-read on generate_response call).
+    """
+    generator = OpenAIResponseGenerator(api_key="sk-explicit-real-key", client=None)
+    import app.config as cfg
+    monkeypatch.setattr(cfg.settings, "OPENAI_API_KEY", "sk-mutated-after-construction")
+    assert generator.api_key == "sk-explicit-real-key"
+
+
+@pytest.mark.asyncio
+async def test_explicit_none_api_key_raises_even_when_settings_has_key(monkeypatch):
+    """Verify that api_key=None with no injected client raises ValueError on generate_response
+    even when settings.OPENAI_API_KEY has a real value at call time.  The explicit None
+    sentinel must take priority over the settings value.
+    """
+    import app.config as cfg
+    monkeypatch.setattr(cfg.settings, "OPENAI_API_KEY", "sk-settings-has-key-but-none-passed")
+    generator = OpenAIResponseGenerator(api_key=None, client=None)
+    with pytest.raises(ValueError, match="OpenAI API key is missing"):
+        await generator.generate_response("Hello")

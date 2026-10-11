@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     OPENAI_CHAT_MODEL: str = "gpt-4o-mini"
     OPENAI_TIMEOUT_SECONDS: float = 30.0
+    ALLOW_DEV_FAKE_GENERATOR: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",
