@@ -140,7 +140,9 @@ For detailed architectural and design specifications, please refer to the docume
 - [Data Model Specification](docs/data-model.md)
 - [RAG Architecture](docs/rag-architecture.md)
 - [Memory Architecture](docs/memory-architecture.md)
+- [Conversation Orchestrator](docs/conversation-orchestrator.md)
 - [Safety Subsystem Architecture](docs/safety-architecture.md)
 - [Security & Privacy Specification](docs/security-and-privacy.md)
 - [API Design Specification](docs/api-design.md)
 - [Development Plan](docs/development-plan.md)
+
