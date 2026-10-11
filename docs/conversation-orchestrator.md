@@ -90,10 +90,18 @@ sequenceDiagram
   - Dialogue generation continues with an empty context, ensuring the user is not left with an unhandled exception.
 - Source provenance (`SourceProvenance`) is attached to the response **only** when retrieval actually returns verified knowledge chunks.
 
-### 2.3 Response Generation & Offline Development
-- Response generation is abstracted behind `ResponseGeneratorProtocol`.
-- A deterministic `DeterministicFakeResponseGenerator` is provided for offline development and local unit testing.
-- **Zero External API Calls:** No external network requests or OpenAI APIs are required during local development or test suites.
+### 2.3 Response Generation & Provider Architecture
+- Response generation is abstracted behind `ResponseGeneratorProtocol` (`generate_response(message, retrieved_chunks, context) -> str`).
+- Two response generator implementations are provided:
+  1. `DeterministicFakeResponseGenerator` (`backend/app/services/conversation_orchestrator.py`):
+     - Purely local, deterministic fake generator used for local development and base unit tests.
+  2. `OpenAIResponseGenerator` (`backend/app/ai/openai_generator.py`):
+     - Real OpenAI Chat Completion adapter (`openai.AsyncOpenAI`) implementing `ResponseGeneratorProtocol`.
+     - Supports model selection (default: `gpt-4o-mini`), bounded timeouts (default: `30.0s`), and client injection for mocking.
+     - Formats verified retrieved chunks as educational reference material without hallucinations.
+     - Enforces prompt boundaries: non-diagnostic, non-prescriptive, and treats reference knowledge strictly as background concepts rather than instructions that override safety rules.
+     - **Safe Imports & Lazy Client:** Does not make network calls on import or startup. If `OPENAI_API_KEY` is omitted, offline tests run cleanly without crashes.
+- **Zero Live Network Calls in Tests:** All provider tests use mocked clients (`AsyncMock`). No real external network calls or OpenAI tokens are consumed.
 
 ### 2.4 Post-Generation Safety & Boundary Validation
 - Generative models can suffer from instruction drift or hallucination. Therefore, every generated text must pass a dedicated output validator (`validate_response_safety`) before reaching the user.
@@ -105,7 +113,23 @@ sequenceDiagram
 
 ---
 
-## 3. Privacy & Data Isolation Guarantees
+## 3. Provider Configuration & Local Setup
+
+Configure environment variables in `backend/.env` for local testing with a real OpenAI key:
+
+```bash
+# OpenAI Chat Completion Configuration
+OPENAI_API_KEY=your-actual-api-key-here
+OPENAI_CHAT_MODEL=gpt-4o-mini
+OPENAI_TIMEOUT_SECONDS=30.0
+```
+
+> [!CAUTION]
+> **Never commit real API keys to version control.** Keep `.env` in `.gitignore` and only commit placeholder values to `.env.example`.
+
+---
+
+## 4. Privacy & Data Isolation Guarantees
 
 1. **No Conversation Persistence into Knowledge Base:**
    - Raw user conversation turns are **never** indexed or written into the Qdrant vector store or knowledge base.
@@ -115,21 +139,26 @@ sequenceDiagram
 
 ---
 
-## 4. System Limitations
+## 5. System Limitations & What is NOT Production-Ready
 
 1. **Rule-Based Foundation:** The deterministic Safety Engine provides a baseline safety foundation, but cannot replace a comprehensive clinical triage system or human crisis worker.
 2. **Not Clinically Certified:** This implementation is not certified as a medical device or diagnostic instrument.
 3. **Non-Sole LLM Safety:** Generative LLMs must never be the sole mechanism for safety enforcement; multi-stage deterministic pre-checks and post-checks are strictly required.
+4. **No Streaming Yet:** The OpenAI provider returns complete responses; streaming WebSocket/SSE generation will be integrated in subsequent phases.
+5. **Memory Separation:** Long-term user memory and persistent daily summaries are not yet wired into the generator.
 
 ---
 
-## 5. Running Tests
+## 6. Running Tests
 
-All unit tests for the Conversation Orchestrator run locally without database or network connections:
+All unit tests for the Conversation Orchestrator and OpenAI provider adapter run 100% offline without database, Qdrant, or live OpenAI connections:
 
 ```powershell
 # From the backend directory
 cd backend
+
+# Run OpenAI provider unit tests
+.venv\Scripts\pytest -v tests/test_openai_generator.py
 
 # Run Conversation Orchestrator unit tests
 .venv\Scripts\pytest -v tests/test_conversation_orchestrator.py
