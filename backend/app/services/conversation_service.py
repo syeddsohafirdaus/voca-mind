@@ -12,6 +12,22 @@ class ConversationService:
     """Service handling business logic for conversations and messages with user ownership enforcement."""
 
     @staticmethod
+    async def list_conversations(
+        db: AsyncSession,
+        user_id: uuid.UUID,
+    ) -> list[Conversation]:
+        """Retrieve the authenticated user's conversations, newest first."""
+        stmt = (
+            select(Conversation)
+            .where(Conversation.user_id == user_id)
+            .options(selectinload(Conversation.messages))
+            .order_by(Conversation.started_at.desc())
+            .limit(100)
+        )
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
+    @staticmethod
     async def create_conversation(
         db: AsyncSession,
         user: User,

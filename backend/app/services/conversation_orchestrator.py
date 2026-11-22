@@ -206,7 +206,7 @@ class ConversationOrchestrator:
                 retrieved_chunks = []
                 sources = []
 
-        # Step 4: Generate dialogue response via injected generator
+                # Step 4: Generate dialogue response via injected generator
         try:
             raw_generated_text = await self.response_generator.generate_response(
                 message=clean_message,
@@ -214,6 +214,13 @@ class ConversationOrchestrator:
                 context={
                     "safety_state": safety_result.state.value,
                     "recommended_action": safety_result.recommended_action.value,
+                    "conversation_history": [
+                        {
+                            "role": item.role,
+                            "content": item.content,
+                        }
+                        for item in request.conversation_history
+                    ],
                 },
             )
             logger.info(f"Response generated successfully: length={len(raw_generated_text)}")

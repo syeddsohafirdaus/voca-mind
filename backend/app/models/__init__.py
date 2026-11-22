@@ -1,6 +1,17 @@
+"""SQLAlchemy models for Voca Mind."""
+
 from app.models.base import Base
 from app.models.user import User
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.models.doctor_application import DoctorApplication
+from app.models.guardian_authorization import GuardianAuthorization
 
-__all__ = ["Base", "User", "Conversation", "Message"]
+__all__ = [
+    "Base",
+    "User",
+    "Conversation",
+    "Message",
+    "DoctorApplication",
+    "GuardianAuthorization",
+]

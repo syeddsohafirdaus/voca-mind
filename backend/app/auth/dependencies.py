@@ -1,5 +1,7 @@
 
-from typing import Any, Dict
+"""Firebase authentication and role-based authorization dependencies."""
+
+from typing import Any, Dict, Iterable
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -14,13 +16,20 @@ from app.models.user import User
 
 security_scheme = HTTPBearer(auto_error=False)
 
+VALID_ROLES = frozenset({"client", "doctor", "guardian"})
 
-async def get_current_user(
+
+async def get_firebase_identity(
     request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(security_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    """Verify a Firebase ID token and return its database user."""
+    credentials: HTTPAuthorizationCredentials | None = Depends(
+        security_scheme
+    ),
+) -> str:
+    """
+    Verify Firebase authentication without creating a database account.
+
+    Returns the verified Firebase UID.
+    """
 
     if credentials is None:
         raise HTTPException(
@@ -29,15 +38,16 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    raw_token = credentials.credentials
-
     try:
-        decoded_token: Dict[str, Any] = verify_firebase_id_token(raw_token)
+        decoded_token: Dict[str, Any] = verify_firebase_id_token(
+            credentials.credentials
+        )
     except Exception:
         logger.warning(
             f"Failed authentication attempt on "
             f"{request.method} {request.url.path}"
         )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
@@ -45,21 +55,102 @@ async def get_current_user(
         )
 
     firebase_uid = decoded_token.get("uid")
-    if not firebase_uid:
+
+    if not isinstance(firebase_uid, str) or not firebase_uid:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    stmt = select(User).where(User.firebase_uid == firebase_uid)
-    result = await db.execute(stmt)
+    return firebase_uid
+
+
+async def get_current_user(
+    firebase_uid: str = Depends(get_firebase_identity),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Return an existing registered user.
+
+    Never create accounts automatically.
+    """
+
+    result = await db.execute(
+        select(User).where(User.firebase_uid == firebase_uid)
+    )
+
     user = result.scalar_one_or_none()
 
     if user is None:
-        user = User(firebase_uid=firebase_uid)
-        db.add(user)
-        await db.commit()
-        await db.refresh(user)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration is required before accessing this feature",
+        )
+
+    if user.account_status == "suspended":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been suspended",
+        )
+
+    if user.account_status not in {"active", "pending"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account status is invalid",
+        )
+
+    if user.role not in VALID_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account role is invalid",
+        )
 
     return user
+
+
+def require_role(allowed_roles: Iterable[str]):
+    """Require an active account with an allowed role."""
+
+    roles = frozenset(allowed_roles)
+
+    if not roles or not roles.issubset(VALID_ROLES):
+        raise ValueError("Invalid allowed roles")
+
+    async def role_dependency(
+        current_user: User = Depends(get_current_user),
+    ) -> User:
+
+        if current_user.account_status != "active":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is not active",
+            )
+
+        if current_user.role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this resource",
+            )
+
+        return current_user
+
+    return role_dependency
+
+
+def require_verified_doctor():
+    """Require an active, verified Doctor account."""
+
+    async def verified_doctor_dependency(
+        current_user: User = Depends(require_role(["doctor"])),
+    ) -> User:
+
+        if not current_user.is_verified:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Professional verification is required",
+            )
+
+        return current_user
+
+    return verified_doctor_dependency
