@@ -12,6 +12,7 @@ from app.api.assignments import router as assignments_router
 from app.api.professional_messages import router as professional_messages_router
 from app.api.support_requests import router as support_requests_router
 from app.api.notifications import router as notifications_router
+from app.api.takeovers import router as takeovers_router
 
 
 api_router = APIRouter()
@@ -86,6 +87,13 @@ api_router.include_router(
     notifications_router,
     prefix="/notifications",
     tags=["Notifications"],
+)
+
+
+api_router.include_router(
+    takeovers_router,
+    prefix="/takeovers",
+    tags=["Human Takeover"],
 )
 
 

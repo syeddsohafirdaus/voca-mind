@@ -1,6 +1,7 @@
 
 """Registration request and response schemas for Voca Mind."""
 
+import uuid
 from datetime import date
 from typing import Literal
 
@@ -75,6 +76,8 @@ class GuardianRegistration(BaseModel):
 
 
 class RegistrationResponse(BaseModel):
+    id: uuid.UUID
+
     """Safe account information returned after registration."""
 
     model_config = ConfigDict(from_attributes=True)

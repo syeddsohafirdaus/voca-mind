@@ -51,7 +51,7 @@ CONCERN_PATTERNS: List[Tuple[re.Pattern, SafetyReasonCode]] = [
     # Hopelessness
     (
         re.compile(
-            r"\b(feel completely hopeless|feeling hopeless|nothing matters anymore|there is no hope for me|no reason to live|what's the point of living|no point in living)\b",
+            r"\b(?:i\s+(?:feel|am|was|have been)\s+(?:feeling\s+)?(?:(?:completely|really|very|totally|utterly)\s+)?hopeless|i'm\s+(?:feeling\s+)?(?:(?:completely|really|very|totally|utterly)\s+)?hopeless|nothing matters anymore|there is no hope(?: for me)?|nothing will ever get better|no reason to live|what's the point of living|no point in living)\b",
             re.IGNORECASE,
         ),
         SafetyReasonCode.HOPELESSNESS_SIGNAL,
@@ -73,6 +73,22 @@ NEGATION_PATTERNS: List[re.Pattern] = [
         re.IGNORECASE,
     ),
 ]
+
+
+# Explicitly negated hopelessness expressions.
+CONCERN_NEGATION_PATTERNS: List[re.Pattern] = [
+    re.compile(
+        r"\b(?:"
+        r"i\s+(?:am not|was not|do not|did not|never)|"
+        r"i'm not|i don't|i didn't"
+        r")\s+"
+        r"(?:(?:feel|feeling)\s+)?"
+        r"(?:(?:completely|really|very|totally|utterly)\s+)?"
+        r"hopeless\b",
+        re.IGNORECASE,
+    ),
+]
+
 
 # Third Party / Fictional Media / Past Event Patterns
 THIRD_PARTY_MEDIA_PATTERNS: List[re.Pattern] = [

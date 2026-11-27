@@ -1,3 +1,5 @@
+import 'professional_dashboard_screen.dart';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,6 +10,8 @@ import 'api_service.dart';
 import 'registration_screen.dart';
 import 'chat_screen.dart';
 import 'settings_screen.dart';
+import 'guardian_dashboard_screen.dart';
+import 'guardian_management_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -145,13 +149,7 @@ class _AccountGateState extends State<AccountGate> {
           }
 
           if (status == 'active' && verified) {
-            return const AccountMessageScreen(
-              title: 'Professional account',
-              message:
-                  'Your account is verified. '
-                  'The professional dashboard is not available yet.',
-              icon: Icons.medical_services_outlined,
-            );
+            return const ProfessionalDashboardScreen(role: 'doctor');
           }
 
           return const AccountMessageScreen(
@@ -164,15 +162,17 @@ class _AccountGateState extends State<AccountGate> {
         }
 
         if (role == 'guardian' && status == 'active') {
-          return const AccountMessageScreen(
-            title: 'Guardian account',
-            message:
-                'Your Guardian account is active. '
-                'Wellbeing updates will only become available '
-                'after explicit authorization from a Client. '
-                'Private conversations are never shown here.',
-            icon: Icons.shield_outlined,
-          );
+          final guardianId = account['id']?.toString();
+
+          if (guardianId == null || guardianId.isEmpty) {
+            return const AccountMessageScreen(
+              title: 'Account unavailable',
+              message: 'Guardian account identifier is missing.',
+              icon: Icons.error_outline,
+            );
+          }
+
+          return GuardianDashboardScreen(guardianId: guardianId);
         }
 
         return const AccountMessageScreen(
@@ -359,6 +359,38 @@ class HomeScreen extends StatelessWidget {
                   onPressed: () => _openSettings(context),
                   icon: const Icon(Icons.person_outline),
                   label: const Text('Profile & Settings'),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const GuardianManagementScreen(),
+                    ),
+                  ),
+                  icon: const Icon(Icons.shield_outlined),
+                  label: const Text('Guardian Management'),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const ProfessionalDashboardScreen(role: 'client'),
+                    ),
+                  ),
+                  icon: const Icon(Icons.medical_services_outlined),
+                  label: const Text('Professional Support'),
                 ),
               ),
               const SizedBox(height: 28),

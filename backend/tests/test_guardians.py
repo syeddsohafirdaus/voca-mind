@@ -86,7 +86,7 @@ async def test_client_grants_guardian_authorization_success():
     bob_id = await get_user_id_by_token("guardian-bob-token")
 
     async with make_auth_client("client-alice-token") as client_ac:
-        payload = {"guardian_id": str(bob_id)}
+        payload = {"guardian_id": str(bob_id), "consent": True}
         resp = await client_ac.post("/api/v1/guardians/authorizations", json=payload)
 
         assert resp.status_code == 201
@@ -107,7 +107,7 @@ async def test_duplicate_authorization_returns_409_conflict():
     guardian_id = await get_user_id_by_token("guardian-dup-token")
 
     async with make_auth_client("client-dup-token") as client_ac:
-        payload = {"guardian_id": str(guardian_id)}
+        payload = {"guardian_id": str(guardian_id), "consent": True}
         resp1 = await client_ac.post("/api/v1/guardians/authorizations", json=payload)
         assert resp1.status_code == 201
 
@@ -124,7 +124,7 @@ async def test_reauthorization_after_revocation_success():
     guardian_id = await get_user_id_by_token("guardian-reauth-token")
 
     async with make_auth_client("client-reauth-token") as client_ac:
-        payload = {"guardian_id": str(guardian_id)}
+        payload = {"guardian_id": str(guardian_id), "consent": True}
 
         # 1. Grant authorization
         resp1 = await client_ac.post("/api/v1/guardians/authorizations", json=payload)
@@ -132,7 +132,7 @@ async def test_reauthorization_after_revocation_success():
         auth_id = resp1.json()["id"]
 
         # 2. Revoke authorization
-        revoke_resp = await client_ac.post(f"/api/v1/guardians/authorizations/{auth_id}/revoke")
+        revoke_resp = await client_ac.post(f"/api/v1/guardians/authorizations/{auth_id}/revoke", params={"consent_version": resp1.json()["consent_version"]})
         assert revoke_resp.status_code == 200
         assert revoke_resp.json()["status"] == "revoked"
         assert revoke_resp.json()["revoked_at"] is not None
@@ -153,7 +153,7 @@ async def test_prevent_self_authorization():
     client_id = await get_user_id_by_token("client-self-token")
 
     async with make_auth_client("client-self-token") as client_ac:
-        payload = {"guardian_id": str(client_id)}
+        payload = {"guardian_id": str(client_id), "consent": True}
         resp = await client_ac.post("/api/v1/guardians/authorizations", json=payload)
 
         assert resp.status_code == 400
@@ -167,7 +167,7 @@ async def test_reject_non_existent_guardian():
     random_uuid = str(uuid.uuid4())
 
     async with make_auth_client("client-fakeg-token") as client_ac:
-        payload = {"guardian_id": random_uuid}
+        payload = {"guardian_id": random_uuid, "consent": True}
         resp = await client_ac.post("/api/v1/guardians/authorizations", json=payload)
 
         assert resp.status_code == 404
@@ -182,7 +182,7 @@ async def test_reject_user_with_non_guardian_role():
     target_client_id = await get_user_id_by_token("client-target-token")
 
     async with make_auth_client("client-caller-token") as client_ac:
-        payload = {"guardian_id": str(target_client_id)}
+        payload = {"guardian_id": str(target_client_id), "consent": True}
         resp = await client_ac.post("/api/v1/guardians/authorizations", json=payload)
 
         assert resp.status_code == 400
@@ -204,7 +204,7 @@ async def test_reject_inactive_guardian():
         await db.commit()
 
     async with make_auth_client("client-inact-token") as client_ac:
-        payload = {"guardian_id": str(guardian_id)}
+        payload = {"guardian_id": str(guardian_id), "consent": True}
         resp = await client_ac.post("/api/v1/guardians/authorizations", json=payload)
 
         assert resp.status_code == 400
@@ -222,14 +222,14 @@ async def test_list_and_filter_guardian_authorizations():
 
     async with make_auth_client("client-list-token") as client_ac:
         # Authorize G1 and G2
-        resp_g1 = await client_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": str(g1_id)})
-        resp_g2 = await client_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": str(g2_id)})
+        resp_g1 = await client_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": str(g1_id), "consent": True})
+        resp_g2 = await client_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": str(g2_id), "consent": True})
         assert resp_g1.status_code == 201
         assert resp_g2.status_code == 201
         g2_auth_id = resp_g2.json()["id"]
 
         # Revoke G2
-        await client_ac.post(f"/api/v1/guardians/authorizations/{g2_auth_id}/revoke")
+        await client_ac.post(f"/api/v1/guardians/authorizations/{g2_auth_id}/revoke", params={"consent_version": resp_g2.json()["consent_version"]})
 
         # List all
         all_resp = await client_ac.get("/api/v1/guardians/authorizations")
@@ -261,7 +261,7 @@ async def test_client_isolation_in_listing():
     g_id = await get_user_id_by_token("guardian-iso-token")
 
     async with make_auth_client("client-iso1-token") as c1_ac:
-        await c1_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": str(g_id)})
+        await c1_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": str(g_id), "consent": True})
 
     async with make_auth_client("client-iso2-token") as c2_ac:
         c2_list = await c2_ac.get("/api/v1/guardians/authorizations")
@@ -280,16 +280,16 @@ async def test_revoke_methods():
 
     async with make_auth_client("client-rev-token") as client_ac:
         # Revocation via DELETE
-        res1 = await client_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": str(g1_id)})
+        res1 = await client_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": str(g1_id), "consent": True})
         auth1_id = res1.json()["id"]
-        del_resp = await client_ac.delete(f"/api/v1/guardians/authorizations/{auth1_id}")
+        del_resp = await client_ac.delete(f"/api/v1/guardians/authorizations/{auth1_id}", params={"consent_version": res1.json()["consent_version"]})
         assert del_resp.status_code == 200
         assert del_resp.json()["status"] == "revoked"
 
         # Revocation via guardian_id
-        res2 = await client_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": str(g2_id)})
+        res2 = await client_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": str(g2_id), "consent": True})
         assert res2.status_code == 201
-        gid_resp = await client_ac.post(f"/api/v1/guardians/{g2_id}/revoke")
+        gid_resp = await client_ac.post(f"/api/v1/guardians/{g2_id}/revoke", params={"consent_version": res2.json()["consent_version"]})
         assert gid_resp.status_code == 200
         assert gid_resp.json()["status"] == "revoked"
 
@@ -303,11 +303,11 @@ async def test_prevent_cross_client_revocation():
     g_id = await get_user_id_by_token("guardian-cross-token")
 
     async with make_auth_client("client-cross1-token") as c1_ac:
-        res = await c1_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": str(g_id)})
+        res = await c1_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": str(g_id), "consent": True})
         auth_id = res.json()["id"]
 
     async with make_auth_client("client-cross2-token") as c2_ac:
-        steal_resp = await c2_ac.post(f"/api/v1/guardians/authorizations/{auth_id}/revoke")
+        steal_resp = await c2_ac.post(f"/api/v1/guardians/authorizations/{auth_id}/revoke", params={"consent_version": res.json()["consent_version"]})
         assert steal_resp.status_code == 404
         assert "not found" in steal_resp.json()["detail"]
 
@@ -321,13 +321,13 @@ async def test_non_clients_cannot_manage_authorizations():
     random_id = str(uuid.uuid4())
 
     async with make_auth_client("guardian-actor-token") as g_ac:
-        g_post = await g_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": random_id})
+        g_post = await g_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": random_id, "consent": True})
         assert g_post.status_code == 403
         g_get = await g_ac.get("/api/v1/guardians/authorizations")
         assert g_get.status_code == 403
 
     async with make_auth_client("doctor-actor-token") as d_ac:
-        d_post = await d_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": random_id})
+        d_post = await d_ac.post("/api/v1/guardians/authorizations", json={"guardian_id": random_id, "consent": True})
         assert d_post.status_code == 403
         d_get = await d_ac.get("/api/v1/guardians/authorizations")
         assert d_get.status_code == 403
@@ -336,7 +336,7 @@ async def test_non_clients_cannot_manage_authorizations():
 @pytest.mark.asyncio
 async def test_unauthenticated_requests_rejected(client: AsyncClient):
     """Test unauthenticated calls to Guardian endpoints return HTTP 401."""
-    resp1 = await client.post("/api/v1/guardians/authorizations", json={"guardian_id": str(uuid.uuid4())})
+    resp1 = await client.post("/api/v1/guardians/authorizations", json={"guardian_id": str(uuid.uuid4()), "consent": True})
     assert resp1.status_code == 401
 
     resp2 = await client.get("/api/v1/guardians/authorizations")
@@ -377,7 +377,7 @@ async def test_privacy_guardian_cannot_access_client_conversations():
         # Client authorizes Guardian
         auth_resp = await client_ac.post(
             "/api/v1/guardians/authorizations",
-            json={"guardian_id": str(g_id)},
+            json={"guardian_id": str(g_id), "consent": True},
         )
         assert auth_resp.status_code == 201
         assert auth_resp.json()["status"] == "active"

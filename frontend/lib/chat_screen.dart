@@ -1,3 +1,9 @@
+import 'professional_dashboard_screen.dart';
+import 'professional_consent.dart';
+import 'professional_api.dart';
+import 'support_offer.dart';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
@@ -151,6 +157,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) return;
 
     setState(() {
+      _supportOffer = null;
+      _humanTakeover = false;
       _isInitializing = true;
       _error = null;
       _conversationId = null;
@@ -184,6 +192,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (id == null || _isLoading || _isInitializing) return;
 
     setState(() {
+      _supportOffer = null;
+      _humanTakeover = false;
       _isInitializing = true;
       _error = null;
     });
@@ -233,6 +243,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) return;
 
     setState(() {
+      _supportOffer = null;
+      _humanTakeover = false;
       _isInitializing = true;
       _error = null;
     });
@@ -401,6 +413,66 @@ class _ChatScreenState extends State<ChatScreen> {
   // SEND MESSAGE
   // ==========================================
 
+  SupportOffer? _supportOffer;
+  bool _supportBusy = false;
+  bool _humanTakeover = false;
+
+  Future<void> _requestSuggestedSupport() async {
+    if (_supportBusy || _supportOffer == null) return;
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final conversationId = _conversationId;
+    final offer = _supportOffer;
+
+    if (uid == null) return;
+
+    setState(() => _supportBusy = true);
+
+    try {
+      final confirmed = await confirmProfessionalAction(
+        context,
+        'Request professional support',
+        'This creates a support request for platform review. '
+            'Your private AI conversations will not be forwarded. '
+            'This is not an emergency service or a guarantee of an immediate reply.',
+      );
+
+      if (!mounted ||
+          !confirmed ||
+          FirebaseAuth.instance.currentUser?.uid != uid ||
+          _conversationId != conversationId ||
+          _supportOffer != offer) {
+        return;
+      }
+
+      await ProfessionalApi().requestSupport(source: 'ai_suggestion');
+
+      if (!mounted || FirebaseAuth.instance.currentUser?.uid != uid) return;
+
+      setState(() => _supportOffer = null);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Support request submitted.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      setState(() => _supportOffer = null);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Request status uncertain. Check Professional Support before retrying.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _supportBusy = false);
+      }
+    }
+  }
+
   Future<void> _sendMessage() async {
     if (_isListening) {
       await _stopListening();
@@ -420,6 +492,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted) return;
 
     setState(() {
+      _supportOffer = null;
       _messages.add({'role': 'user', 'content': message});
 
       _isLoading = true;
@@ -430,14 +503,18 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
 
     try {
-      final reply = await _api.sendMessage(
+      final result = await _api.sendMessageDetailed(
         conversationId: _conversationId!,
         message: message,
       );
 
+      final reply = result['reply'] as String;
+
       if (!mounted) return;
 
       setState(() {
+        _supportOffer = SupportOffer.fromJson(result['support_offer']);
+        _humanTakeover = result['is_human_takeover'] == true;
         _messages.add({'role': 'assistant', 'content': reply});
 
         _isLoading = false;
@@ -576,6 +653,43 @@ class _ChatScreenState extends State<ChatScreen> {
                       label: const Text('Refresh Chat'),
                     ),
                 ],
+              ),
+            ),
+
+          if (_supportOffer != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    Text(_supportOffer!.message),
+                    FilledButton(
+                      onPressed: (_supportBusy || _isLoading || _isInitializing)
+                          ? null
+                          : _requestSuggestedSupport,
+                      child: const Text('Request professional support'),
+                    ),
+                    TextButton(
+                      onPressed: _supportBusy
+                          ? null
+                          : () => setState(() => _supportOffer = null),
+                      child: const Text('Not now'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          if (_humanTakeover)
+            TextButton.icon(
+              icon: const Icon(Icons.medical_services_outlined),
+              label: const Text('Open Professional Support'),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      const ProfessionalDashboardScreen(role: 'client'),
+                ),
               ),
             ),
 

@@ -6,6 +6,38 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
+  Future<dynamic> requestJson(
+    String method,
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? query,
+  }) async {
+    final uri = Uri.parse('$baseUrl$path').replace(queryParameters: query);
+
+    final response = await _handleRequest(() async {
+      final headers = await _headers();
+
+      switch (method) {
+        case 'GET':
+          return http.get(uri, headers: headers);
+        case 'POST':
+          return http.post(uri, headers: headers, body: jsonEncode(body ?? {}));
+        case 'DELETE':
+          return http.delete(uri, headers: headers);
+        default:
+          throw ArgumentError('Unsupported HTTP method');
+      }
+    }, timeout: const Duration(seconds: 30));
+
+    _checkResponse(response);
+
+    if (response.statusCode == 204 || response.body.isEmpty) {
+      return null;
+    }
+
+    return jsonDecode(response.body);
+  }
+
   // Android emulator connects to the Windows/WSL backend.
   static const String baseUrl = 'http://10.0.2.2:8000/api/v1';
 
@@ -58,7 +90,18 @@ class ApiService {
     }
 
     if (status == 404) {
-      throw Exception('The requested conversation could not be found.');
+      throw Exception('The requested resource could not be found.');
+    }
+
+    if (status == 409) {
+      throw Exception(
+        'This information has changed. Refresh and review '
+        'your action before trying again.',
+      );
+    }
+
+    if (status == 422) {
+      throw Exception('Please check the information and consent requirements.');
     }
 
     if (status == 429) {
@@ -294,6 +337,17 @@ class ApiService {
     required String conversationId,
     required String message,
   }) async {
+    final result = await sendMessageDetailed(
+      conversationId: conversationId,
+      message: message,
+    );
+    return result['reply'] as String;
+  }
+
+  Future<Map<String, dynamic>> sendMessageDetailed({
+    required String conversationId,
+    required String message,
+  }) async {
     if (message.trim().isEmpty) {
       throw Exception('Please enter a message.');
     }
@@ -332,6 +386,10 @@ class ApiService {
       );
     }
 
-    return content;
+    return {
+      'reply': content,
+      'support_offer': data['support_offer'],
+      'is_human_takeover': data['is_human_takeover'] == true,
+    };
   }
 }

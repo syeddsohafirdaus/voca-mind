@@ -72,6 +72,11 @@ class OrchestrationRequest(BaseModel):
         max_length=10,
         description="Previous messages from this conversation only.",
     )
+    human_takeover_active: bool = Field(
+        default=False,
+        description="Server-resolved eligible human takeover status.",
+    )
+
     top_k: int = Field(
         default=3,
         ge=1,
@@ -123,6 +128,11 @@ class OrchestrationResponse(BaseModel):
             "to direct immediate crisis/emergency support."
         ),
     )
+    is_human_takeover: bool = Field(
+        default=False,
+        description="Whether the turn used human takeover routing.",
+    )
+
     fallback_triggered: bool = Field(
         default=False,
         description=(

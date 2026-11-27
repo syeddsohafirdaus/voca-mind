@@ -127,6 +127,7 @@ async def list_guardian_authorizations(
 )
 async def revoke_authorization_by_id(
     authorization_id: uuid.UUID,
+    consent_version: uuid.UUID,
     current_user: User = Depends(get_current_client),
     db: AsyncSession = Depends(get_db),
 ) -> GuardianAuthorizationResponse:
@@ -135,6 +136,7 @@ async def revoke_authorization_by_id(
         db=db,
         client_id=current_user.id,
         authorization_id=authorization_id,
+        consent_version=consent_version,
     )
 
     guardian_name = await db.scalar(
@@ -155,6 +157,7 @@ async def revoke_authorization_by_id(
 )
 async def revoke_authorization_by_guardian_id(
     guardian_id: uuid.UUID,
+    consent_version: uuid.UUID,
     current_user: User = Depends(get_current_client),
     db: AsyncSession = Depends(get_db),
 ) -> GuardianAuthorizationResponse:
@@ -163,6 +166,7 @@ async def revoke_authorization_by_guardian_id(
         db=db,
         client_id=current_user.id,
         guardian_id=guardian_id,
+        consent_version=consent_version,
     )
 
     guardian_name = await db.scalar(
@@ -172,3 +176,78 @@ async def revoke_authorization_by_guardian_id(
     resp = GuardianAuthorizationResponse.model_validate(auth)
     resp.guardian_display_name = guardian_name
     return resp
+
+
+from fastapi import HTTPException, Response
+
+from app.schemas.guardian import (
+    WellbeingShareRequest,
+    WellbeingShareResponse,
+    GuardianDashboardItem,
+)
+
+from app.services.guardian_wellbeing_service import (
+    share_wellbeing,
+    clear_wellbeing,
+    list_guardian_dashboard,
+)
+
+get_current_guardian = require_role(["guardian"])
+
+
+@router.post(
+    "/authorizations/{authorization_id}/wellbeing",
+    response_model=WellbeingShareResponse,
+)
+async def publish_wellbeing(
+    authorization_id: uuid.UUID,
+    consent_version: uuid.UUID,
+    payload: WellbeingShareRequest,
+    current_user: User = Depends(get_current_client),
+    db: AsyncSession = Depends(get_db),
+):
+    if payload.consent is not True:
+        raise HTTPException(422, "Explicit consent is required")
+
+    return await share_wellbeing(
+        db,
+        current_user.id,
+        authorization_id,
+        payload.wellbeing,
+        consent_version=consent_version,
+    )
+
+
+@router.delete(
+    "/authorizations/{authorization_id}/wellbeing",
+    status_code=204,
+)
+async def withdraw_wellbeing(
+    authorization_id: uuid.UUID,
+    consent_version: uuid.UUID,
+    current_user: User = Depends(get_current_client),
+    db: AsyncSession = Depends(get_db),
+):
+    await clear_wellbeing(
+        db, current_user.id, authorization_id, consent_version
+    )
+
+    return Response(status_code=204)
+
+
+@router.get(
+    "/dashboard",
+    response_model=list[GuardianDashboardItem],
+)
+async def guardian_dashboard(
+    response: Response,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_guardian),
+    db: AsyncSession = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "no-store"
+
+    return await list_guardian_dashboard(
+        db, current_user.id, limit, offset
+    )

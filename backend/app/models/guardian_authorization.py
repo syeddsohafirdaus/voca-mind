@@ -99,3 +99,9 @@ class GuardianAuthorization(Base):
         foreign_keys=[guardian_id],
         lazy="selectin",
     )
+
+    consent_version: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        nullable=False,
+        default=uuid.uuid4,
+    )

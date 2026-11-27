@@ -22,6 +22,9 @@ from app.schemas.orchestrator import (
     OrchestrationRequest,
 )
 from app.services.conversation_orchestrator import ConversationOrchestrator
+from app.services.takeover_availability import (
+    get_eligible_active_takeover,
+)
 from app.services.conversation_service import ConversationService
 from app.services.orchestrator_factory import get_orchestrator
 
@@ -176,12 +179,27 @@ async def add_message(
         for msg in previous_messages[-10:]
     ]
 
-    # 4. Run the existing AI orchestration pipeline.
+    # 4. Resolve takeover eligibility on the server.
+    try:
+        async with db.begin_nested():
+            eligible_takeover = await get_eligible_active_takeover(
+                db,
+                current_user.id,
+            )
+    except Exception:
+        logger.warning(
+            "Takeover eligibility lookup failed; "
+            "continuing with safety-aware AI routing."
+        )
+        eligible_takeover = None
+
+    # Run the AI pipeline with server-controlled takeover status.
     orchestration_req = OrchestrationRequest(
         message=payload.content,
         conversation_id=conversation_id,
         user_id=current_user.id,
         conversation_history=recent_history,
+        human_takeover_active=eligible_takeover is not None,
     )
 
     orchestration_resp = await orchestrator.handle_turn(
@@ -229,6 +247,7 @@ async def add_message(
         assistant_reply=assistant_msg_resp,
         sources=orchestration_resp.sources,
         is_safety_diverted=orchestration_resp.is_safety_diverted,
+        is_human_takeover=orchestration_resp.is_human_takeover,
         support_offer=None,
     )
 

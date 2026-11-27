@@ -5,13 +5,14 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.logger import logger
 from app.models.guardian_authorization import GuardianAuthorization
 from app.models.user import User
+from app.models.guardian_wellbeing import GuardianWellbeing
 
 
 class GuardianService:
@@ -69,6 +70,7 @@ class GuardianService:
             GuardianAuthorization.client_id == client.id,
             GuardianAuthorization.guardian_id == guardian_id,
         )
+        existing_stmt = existing_stmt.with_for_update().execution_options(populate_existing=True)
         existing_result = await db.execute(existing_stmt)
         existing_auth = existing_result.scalar_one_or_none()
 
@@ -85,6 +87,13 @@ class GuardianService:
             existing_auth.status = "active"
             existing_auth.consented_at = now
             existing_auth.revoked_at = None
+            existing_auth.consent_version = uuid.uuid4()
+
+            await db.execute(
+                delete(GuardianWellbeing).where(
+                    GuardianWellbeing.authorization_id == existing_auth.id
+                )
+            )
 
             try:
                 await db.commit()
@@ -156,6 +165,7 @@ class GuardianService:
         db: AsyncSession,
         client_id: uuid.UUID,
         authorization_id: uuid.UUID,
+        consent_version: uuid.UUID,
     ) -> GuardianAuthorization:
         """
         Revoke an authorization by its authorization ID.
@@ -167,6 +177,7 @@ class GuardianService:
             GuardianAuthorization.id == authorization_id,
             GuardianAuthorization.client_id == client_id,
         )
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
         result = await db.execute(stmt)
         auth = result.scalar_one_or_none()
 
@@ -176,6 +187,12 @@ class GuardianService:
                 detail="Guardian authorization not found.",
             )
 
+        if auth.consent_version != consent_version:
+            raise HTTPException(
+                status_code=409,
+                detail="Guardian consent version has changed.",
+            )
+
         if auth.status == "revoked":
             # Idempotent return if already revoked
             return auth
@@ -183,6 +200,12 @@ class GuardianService:
         now = datetime.now(timezone.utc)
         auth.status = "revoked"
         auth.revoked_at = now
+
+        await db.execute(
+            delete(GuardianWellbeing).where(
+                GuardianWellbeing.authorization_id == auth.id
+            )
+        )
 
         await db.commit()
         await db.refresh(auth)
@@ -197,6 +220,7 @@ class GuardianService:
         db: AsyncSession,
         client_id: uuid.UUID,
         guardian_id: uuid.UUID,
+        consent_version: uuid.UUID,
     ) -> GuardianAuthorization:
         """
         Revoke an authorization directly by Guardian user ID.
@@ -208,6 +232,7 @@ class GuardianService:
             GuardianAuthorization.guardian_id == guardian_id,
             GuardianAuthorization.client_id == client_id,
         )
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
         result = await db.execute(stmt)
         auth = result.scalar_one_or_none()
 
@@ -217,12 +242,24 @@ class GuardianService:
                 detail="Guardian authorization not found for this guardian.",
             )
 
+        if auth.consent_version != consent_version:
+            raise HTTPException(
+                status_code=409,
+                detail="Guardian consent version has changed.",
+            )
+
         if auth.status == "revoked":
             return auth
 
         now = datetime.now(timezone.utc)
         auth.status = "revoked"
         auth.revoked_at = now
+
+        await db.execute(
+            delete(GuardianWellbeing).where(
+                GuardianWellbeing.authorization_id == auth.id
+            )
+        )
 
         await db.commit()
         await db.refresh(auth)

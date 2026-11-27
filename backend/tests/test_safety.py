@@ -166,3 +166,85 @@ def test_advanced_safety_regressions(message, expected):
         assert result.recommended_action == (
             RecommendedAction.IMMEDIATE_HUMAN_EMERGENCY_SUPPORT
         )
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "I feel hopeless.",
+        "I am hopeless.",
+        "I feel completely hopeless.",
+        "I feel really hopeless.",
+        "I'm feeling hopeless.",
+        "There is no hope.",
+        "There is no hope for me.",
+        "Nothing will ever get better.",
+        "I FEEL HOPELESS!",
+    ],
+)
+def test_expanded_hopelessness_detection(message):
+    result = evaluate_message(message)
+
+    assert result.state == SafetyState.CONCERN
+    assert result.requires_human_support is True
+    assert result.requires_emergency_guidance is False
+    assert SafetyReasonCode.HOPELESSNESS_SIGNAL in result.reasons
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "I am not feeling hopeless.",
+        "I don't feel hopeless.",
+        "I'm not hopeless.",
+        "I do not feel hopeless.",
+        "I am not completely hopeless.",
+        "I never feel hopeless.",
+        "I watched a movie about hopelessness.",
+        "I feel sad today.",
+        "I feel overwhelmed.",
+        "I am worried about my exams.",
+    ],
+)
+def test_hopelessness_false_positive_protection(message):
+    result = evaluate_message(message)
+
+    assert result.state == SafetyState.LOW
+    assert result.requires_human_support is False
+    assert result.requires_emergency_guidance is False
+
+
+@pytest.mark.parametrize(
+    "message,expected",
+    [
+        (
+            "I am not feeling hopeless, but I cannot cope anymore.",
+            SafetyState.CONCERN,
+        ),
+        (
+            "I don't feel hopeless, but I want to die.",
+            SafetyState.HIGH_RISK,
+        ),
+        (
+            "I don't want to die, but I feel hopeless.",
+            SafetyState.CONCERN,
+        ),
+        (
+            "My friend ignored me and I feel hopeless.",
+            SafetyState.CONCERN,
+        ),
+        (
+            "I feel hopeless and I cannot stay safe.",
+            SafetyState.HIGH_RISK,
+        ),
+    ],
+)
+def test_hopelessness_mixed_context(message, expected):
+    result = evaluate_message(message)
+
+    assert result.state == expected
+    assert result.requires_human_support is True
+
+    assert result.requires_emergency_guidance == (
+        expected == SafetyState.HIGH_RISK
+    )

@@ -13,7 +13,10 @@ from app.models.guardian_authorization import GuardianAuthorization
 
 from app.models.notification import Notification
 
+from app.models.human_takeover import HumanTakeover
+
 __all__ = [
+    "HumanTakeover",
     "Base",
     "Notification",
     "User",
@@ -26,3 +29,5 @@ __all__ = [
     "SupportRequest",
     "GuardianAuthorization",
 ]
+
+from app.models.guardian_wellbeing import GuardianWellbeing

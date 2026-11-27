@@ -5,7 +5,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StrictBool, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,7 +26,14 @@ class SupportRequestCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source: Literal["client", "ai_suggestion"] = "client"
-    consent: Literal[True]
+    consent: StrictBool
+
+    @field_validator("consent")
+    @classmethod
+    def validate_consent(cls, value: bool) -> bool:
+        if value is not True:
+            raise ValueError("Explicit consent is required")
+        return value
 
 
 class SupportRequestResponse(BaseModel):

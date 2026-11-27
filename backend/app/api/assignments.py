@@ -20,6 +20,7 @@ from app.models.doctor_application import DoctorApplication
 from app.models.doctor_assignment import DoctorAssignment
 from app.models.support_request import SupportRequest
 from app.services.notification_service import create_notification
+from app.services.human_takeover_service import close_assignment_takeover
 
 
 router = APIRouter()
@@ -307,6 +308,10 @@ async def revoke_assignment(
     assignment.status = "revoked"
     assignment.ended_at = datetime.now(timezone.utc)
 
+    await close_assignment_takeover(
+        db, assignment.id
+    )
+
     await close_linked_support_request(
         db,
         assignment.id,
@@ -358,6 +363,10 @@ async def complete_assignment(
 
     assignment.status = "completed"
     assignment.ended_at = datetime.now(timezone.utc)
+
+    await close_assignment_takeover(
+        db, assignment.id
+    )
 
     await close_linked_support_request(
         db,

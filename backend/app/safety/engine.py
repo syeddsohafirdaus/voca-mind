@@ -5,6 +5,7 @@ from app.logger import logger
 from app.safety.enums import RecommendedAction, SafetyReasonCode, SafetyState
 from app.safety.rules import (
     CONCERN_PATTERNS,
+    CONCERN_NEGATION_PATTERNS,
     HIGH_RISK_PATTERNS,
     NEGATION_PATTERNS,
     THIRD_PARTY_MEDIA_PATTERNS,
@@ -71,9 +72,16 @@ def evaluate_message(message: str) -> SafetyResult:
         return result
 
     # 4. Check Concern Patterns
+    concern_text = clean_message
+
+    # Remove explicitly negated concern phrases only.
+    # Independent distress and crisis signals remain intact.
+    for pattern in CONCERN_NEGATION_PATTERNS:
+        concern_text = pattern.sub(" ", concern_text)
+
     concern_reasons: list[SafetyReasonCode] = []
     for pattern, reason in CONCERN_PATTERNS:
-        if pattern.search(clean_message):
+        if pattern.search(concern_text):
             concern_reasons.append(reason)
 
     if concern_reasons:

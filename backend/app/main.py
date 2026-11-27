@@ -72,7 +72,14 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "error": {
                 "code": "VALIDATION_ERROR",
                 "message": "Invalid request payload or parameters.",
-                "details": exc.errors(),
+                "details": [
+                {
+                    "loc": error["loc"],
+                    "type": error["type"],
+                    "msg": "Invalid request value",
+                }
+                for error in exc.errors()
+            ],
             }
         },
     )
@@ -81,7 +88,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global unhandled exception handler that prevents stack trace leaks."""
-    logger.error(f"Unhandled exception on {request.method} {request.url.path}: {str(exc)}")
+    logger.error(f"Unhandled request exception: {type(exc).__name__}")
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={

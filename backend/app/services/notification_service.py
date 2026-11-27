@@ -16,6 +16,10 @@ ALLOWED_EVENTS = frozenset({
     "assignment_revoked",
     "assignment_completed",
     "professional_message",
+    "takeover_requested",
+    "takeover_accepted",
+    "takeover_cancelled",
+    "takeover_ended",
 })
 
 

@@ -51,6 +51,19 @@ CRISIS_FOLLOWUP_RESPONSE = (
 )
 
 
+HUMAN_TAKEOVER_RESPONSE = (
+    "Thank you for continuing to share how you are feeling. "
+    "Your professional support session has been accepted. "
+    "You can communicate with your assigned professional "
+    "through professional messaging. "
+    "Messages here are not automatically forwarded to them. "
+    "An accepted session does not mean your professional "
+    "is currently online or able to respond immediately. "
+    "You can choose to end the takeover and return to "
+    "ordinary AI conversation whenever you wish."
+)
+
+
 SAFE_FALLBACK_RESPONSE = (
     "I want to support you, but as an automated wellness assistant, I cannot provide medical diagnoses, "
     "prescribe medications, or advise on altering medical treatments. "
@@ -259,6 +272,21 @@ class ConversationOrchestrator:
                 safety_result=safety_result,
                 sources=[],
                 is_safety_diverted=True,
+                fallback_triggered=False,
+                fallback_reason=None,
+            )
+
+        # Human takeover never overrides crisis interception.
+        if request.human_takeover_active:
+            return OrchestrationResponse(
+                response_text=enforce_safety_check_in(
+                    HUMAN_TAKEOVER_RESPONSE,
+                    safety_result,
+                ),
+                safety_result=safety_result,
+                sources=[],
+                is_safety_diverted=False,
+                is_human_takeover=True,
                 fallback_triggered=False,
                 fallback_reason=None,
             )

@@ -57,4 +57,6 @@ class MessageResponse(BaseModel):
         description="Whether the turn bypassed ordinary generation to provide immediate crisis resources."
     )
 
+    is_human_takeover: bool = False
+
     model_config = ConfigDict(from_attributes=True)
