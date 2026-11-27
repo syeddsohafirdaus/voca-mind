@@ -184,6 +184,23 @@ Necessary safety guidance takes priority over brevity.
         # CONVERSATION MEMORY
         # ==========================================
 
+        # Apply trusted backend safety routing instructions.
+        if isinstance(context, dict):
+            safety_state = context.get("safety_state")
+
+            if safety_state == "CONCERN":
+                system_prompt += (
+                    "\nCURRENT SAFETY ROUTING: CONCERN\n"
+                    "The backend detected possible emotional distress. "
+                    "Acknowledge the user's feelings compassionately. "
+                    "When relevant, ask a direct and gentle safety question. "
+                    "Encourage appropriate professional support when needed. "
+                    "Do not diagnose or minimize the user's distress. "
+                    "If immediate danger becomes apparent, encourage "
+                    "local emergency services and trusted human support. "
+                    "Never claim that assistance has been dispatched."
+                )
+
         messages = [
             {
                 "role": "system",

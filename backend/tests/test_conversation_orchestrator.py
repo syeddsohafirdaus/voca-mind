@@ -145,8 +145,8 @@ async def test_high_risk_message_bypasses_retrieval_and_generation():
     assert len(fake_generator.calls) == 0
 
     # Must provide immediate crisis contact resources
-    assert "988" in response.response_text
-    assert "741741" in response.response_text
+    assert "112" in response.response_text
+    assert "14416" in response.response_text
     assert "emergency" in response.response_text.lower()
 
 

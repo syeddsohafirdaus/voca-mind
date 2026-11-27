@@ -8,6 +8,7 @@ from app.config import settings
 from app.services.conversation_orchestrator import (
     ConversationOrchestrator,
     DEFAULT_CRISIS_SAFETY_RESPONSE,
+    CRISIS_FOLLOWUP_RESPONSE,
     GENERATOR_ERROR_FALLBACK,
     SAFE_FALLBACK_RESPONSE,
 )
@@ -148,7 +149,8 @@ async def test_high_risk_bypass_proves_neither_retrieval_nor_generator_called(au
         assert assistant_reply["role"] == "assistant"
         assert "findahelpline.com" in assistant_reply["content"]
         assert "befrienders.org" in assistant_reply["content"]
-        assert "988" in assistant_reply["content"]
+        assert "112" in assistant_reply["content"]
+        assert "14416" in assistant_reply["content"]
 
         # Verify persisted messages in database
         get_conv_res = await auth_client_user1.get(f"/api/v1/conversations/{conv_id}")
@@ -486,7 +488,7 @@ async def test_multiturn_api_safety(
             assert spy_generator.call_count == 0
             assert (
                 data["assistant_reply"]["content"]
-                == DEFAULT_CRISIS_SAFETY_RESPONSE
+                == CRISIS_FOLLOWUP_RESPONSE
             )
 
         else:
