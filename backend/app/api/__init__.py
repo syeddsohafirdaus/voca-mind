@@ -11,6 +11,7 @@ from app.api.admin import router as admin_router
 from app.api.assignments import router as assignments_router
 from app.api.professional_messages import router as professional_messages_router
 from app.api.support_requests import router as support_requests_router
+from app.api.notifications import router as notifications_router
 
 
 api_router = APIRouter()
@@ -77,6 +78,14 @@ api_router.include_router(
     support_requests_router,
     prefix="/support",
     tags=["Professional Support"],
+)
+
+
+# Recipient-only notification endpoints
+api_router.include_router(
+    notifications_router,
+    prefix="/notifications",
+    tags=["Notifications"],
 )
 
 

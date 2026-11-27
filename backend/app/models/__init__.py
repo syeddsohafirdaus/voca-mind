@@ -11,8 +11,11 @@ from app.models.professional_message import ProfessionalMessage
 from app.models.support_request import SupportRequest
 from app.models.guardian_authorization import GuardianAuthorization
 
+from app.models.notification import Notification
+
 __all__ = [
     "Base",
+    "Notification",
     "User",
     "Conversation",
     "Message",

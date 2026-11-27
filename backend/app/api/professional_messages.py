@@ -14,6 +14,7 @@ from app.models.user import User
 from app.models.doctor_application import DoctorApplication
 from app.models.doctor_assignment import DoctorAssignment
 from app.models.professional_message import ProfessionalMessage
+from app.services.notification_service import create_notification
 
 
 router = APIRouter()
@@ -140,6 +141,19 @@ async def send_message(
     )
 
     db.add(message)
+
+    recipient_id = (
+        assignment.doctor_id
+        if user.id == assignment.client_id
+        else assignment.client_id
+    )
+
+    await create_notification(
+        db,
+        recipient_id=recipient_id,
+        event_type="professional_message",
+        reference_id=assignment.id,
+    )
 
     await db.commit()
     await db.refresh(message)

@@ -19,6 +19,7 @@ from app.models.user import User
 from app.models.doctor_application import DoctorApplication
 from app.models.doctor_assignment import DoctorAssignment
 from app.models.support_request import SupportRequest
+from app.services.notification_service import create_notification
 
 
 router = APIRouter()
@@ -29,6 +30,7 @@ class AssignmentRequest(BaseModel):
 
     client_id: UUID
     doctor_id: UUID
+    support_request_id: UUID | None = None
 
 
 class AssignmentResponse(BaseModel):
@@ -95,6 +97,33 @@ async def propose_assignment(
     if doctor is None:
         raise HTTPException(409, "Professional is not eligible")
 
+    support_query = select(SupportRequest).where(
+        SupportRequest.client_id == client.id,
+        SupportRequest.status == "pending",
+    )
+
+    if payload.support_request_id is not None:
+        support_query = support_query.where(
+            SupportRequest.id == payload.support_request_id
+        )
+
+    result = await db.execute(
+        support_query
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+
+    support_request = result.scalar_one_or_none()
+
+    if (
+        payload.support_request_id is not None
+        and support_request is None
+    ):
+        raise HTTPException(
+            409,
+            "Support request is not eligible for assignment",
+        )
+
     assignment = DoctorAssignment(
         client_id=client.id,
         doctor_id=doctor.id,
@@ -107,20 +136,16 @@ async def propose_assignment(
     try:
         await db.flush()
 
-        result = await db.execute(
-            select(SupportRequest)
-            .where(
-                SupportRequest.client_id == client.id,
-                SupportRequest.status == "pending",
-            )
-            .with_for_update()
-        )
-
-        support_request = result.scalar_one_or_none()
-
         if support_request is not None:
             support_request.assignment_id = assignment.id
             support_request.status = "assigned"
+
+        await create_notification(
+            db,
+            recipient_id=assignment.client_id,
+            event_type="assignment_proposed",
+            reference_id=assignment.id,
+        )
 
         await db.commit()
     except IntegrityError:
@@ -245,6 +270,13 @@ async def accept_assignment(
     assignment.status = "active"
     assignment.consented_at = datetime.now(timezone.utc)
 
+    await create_notification(
+        db,
+        recipient_id=assignment.doctor_id,
+        event_type="assignment_accepted",
+        reference_id=assignment.id,
+    )
+
     await db.commit()
     await db.refresh(assignment)
 
@@ -267,6 +299,11 @@ async def revoke_assignment(
     if assignment.status not in {"pending", "active"}:
         raise HTTPException(409, "Assignment has already ended")
 
+    was_active = (
+        assignment.status == "active"
+        and assignment.consented_at is not None
+    )
+
     assignment.status = "revoked"
     assignment.ended_at = datetime.now(timezone.utc)
 
@@ -275,6 +312,14 @@ async def revoke_assignment(
         assignment.id,
         "cancelled",
     )
+
+    if was_active:
+        await create_notification(
+            db,
+            recipient_id=assignment.doctor_id,
+            event_type="assignment_revoked",
+            reference_id=assignment.id,
+        )
 
     await db.commit()
     await db.refresh(assignment)
@@ -318,6 +363,13 @@ async def complete_assignment(
         db,
         assignment.id,
         "closed",
+    )
+
+    await create_notification(
+        db,
+        recipient_id=assignment.client_id,
+        event_type="assignment_completed",
+        reference_id=assignment.id,
     )
 
     await db.commit()

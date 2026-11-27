@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -204,3 +204,51 @@ async def review_application(
     await db.refresh(user)
 
     return serialize_application(application, user)
+
+
+class EligibleProfessionalResponse(BaseModel):
+    id: UUID
+    display_name: str | None
+    specialization: str
+    licensing_authority: str
+    verified: bool
+
+
+@router.get(
+    "/eligible-professionals",
+    response_model=list[EligibleProfessionalResponse],
+)
+async def list_eligible_professionals(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    admin_uid: str = Depends(require_platform_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(User, DoctorApplication)
+        .join(
+            DoctorApplication,
+            DoctorApplication.user_id == User.id,
+        )
+        .where(
+            User.role == "doctor",
+            User.account_status == "active",
+            User.is_verified.is_(True),
+            DoctorApplication.status == "approved",
+            DoctorApplication.reviewed_at.is_not(None),
+        )
+        .order_by(User.display_name, User.id)
+        .offset(offset)
+        .limit(limit)
+    )
+
+    return [
+        EligibleProfessionalResponse(
+            id=user.id,
+            display_name=user.display_name,
+            specialization=application.specialization,
+            licensing_authority=application.licensing_authority,
+            verified=user.is_verified,
+        )
+        for user, application in result.all()
+    ]

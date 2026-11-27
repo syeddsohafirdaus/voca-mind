@@ -15,6 +15,7 @@ from app.auth.dependencies import require_role
 from app.database import get_db
 from app.models.user import User
 from app.models.support_request import SupportRequest
+from app.services.notification_service import create_notification
 from app.models.doctor_assignment import DoctorAssignment
 
 
@@ -88,6 +89,15 @@ async def create_support_request(
     db.add(request)
 
     try:
+        await db.flush()
+
+        await create_notification(
+            db,
+            recipient_id=request.client_id,
+            event_type="support_requested",
+            reference_id=request.id,
+        )
+
         await db.commit()
     except IntegrityError:
         await db.rollback()
