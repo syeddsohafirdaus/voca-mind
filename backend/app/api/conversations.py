@@ -8,6 +8,10 @@ from app.auth.dependencies import require_role
 from app.database import get_db
 from app.logger import logger
 from app.models.user import User
+from app.safety.support_offer import build_support_offer
+from app.services.support_availability import (
+    has_open_professional_support,
+)
 from app.schemas.conversation import (
     ConversationCreate,
     ConversationResponse,
@@ -216,7 +220,7 @@ async def add_message(
         assistant_msg
     )
 
-    return MessageResponse(
+    response = MessageResponse(
         id=user_msg.id,
         conversation_id=user_msg.conversation_id,
         role=user_msg.role,
@@ -225,4 +229,27 @@ async def add_message(
         assistant_reply=assistant_msg_resp,
         sources=orchestration_resp.sources,
         is_safety_diverted=orchestration_resp.is_safety_diverted,
+        support_offer=None,
     )
+
+    support_offer = build_support_offer(
+        orchestration_resp.safety_result
+    )
+
+    if support_offer.offered:
+        try:
+            has_open_support = await has_open_professional_support(
+                db, current_user.id
+            )
+            support_offer = build_support_offer(
+                orchestration_resp.safety_result,
+                has_open_support=has_open_support,
+            )
+        except Exception:
+            await db.rollback()
+            logger.warning(
+                "Support availability check failed"
+            )
+
+    response.support_offer = support_offer
+    return response

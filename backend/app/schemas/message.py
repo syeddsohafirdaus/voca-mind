@@ -5,6 +5,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.schemas.orchestrator import SourceProvenance
 
 
+from app.safety.support_offer import SupportOffer
+
+
 class MessageCreate(BaseModel):
     """Schema for submitting a message to a conversation.
 
@@ -33,6 +36,8 @@ class MessageCreate(BaseModel):
 
 class MessageResponse(BaseModel):
     """Schema for message API responses."""
+
+    support_offer: SupportOffer | None = None
 
     id: UUID
     conversation_id: UUID
