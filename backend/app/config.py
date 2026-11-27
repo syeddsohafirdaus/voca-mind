@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     FIREBASE_CREDENTIALS_PATH: str | None = None
     FIREBASE_AUTH_EMULATOR_HOST: str | None = None
 
+    # Restricted platform administrators
+    PLATFORM_ADMIN_UIDS: str = ""
+
     # Qdrant and embeddings
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_API_KEY: str | None = None

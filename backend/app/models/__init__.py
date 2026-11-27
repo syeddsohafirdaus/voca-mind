@@ -5,6 +5,8 @@ from app.models.user import User
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.doctor_application import DoctorApplication
+from app.models.doctor_review import DoctorReview
+from app.models.doctor_assignment import DoctorAssignment
 from app.models.guardian_authorization import GuardianAuthorization
 
 __all__ = [
@@ -13,5 +15,7 @@ __all__ = [
     "Conversation",
     "Message",
     "DoctorApplication",
+    "DoctorReview",
+    "DoctorAssignment",
     "GuardianAuthorization",
 ]

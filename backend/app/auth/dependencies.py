@@ -12,6 +12,7 @@ from app.auth.firebase import verify_firebase_id_token
 from app.database import get_db
 from app.logger import logger
 from app.models.user import User
+from app.models.doctor_application import DoctorApplication
 
 
 security_scheme = HTTPBearer(auto_error=False)
@@ -143,12 +144,29 @@ def require_verified_doctor():
 
     async def verified_doctor_dependency(
         current_user: User = Depends(require_role(["doctor"])),
+        db: AsyncSession = Depends(get_db),
     ) -> User:
 
         if not current_user.is_verified:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Professional verification is required",
+            )
+
+        result = await db.execute(
+            select(DoctorApplication).where(
+                DoctorApplication.user_id == current_user.id,
+                DoctorApplication.status == "approved",
+                DoctorApplication.reviewed_at.is_not(None),
+            )
+        )
+
+        application = result.scalar_one_or_none()
+
+        if application is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Approved professional application is required",
             )
 
         return current_user
