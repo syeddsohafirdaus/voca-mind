@@ -1,7 +1,11 @@
+import re
+import unicodedata
+
 from app.logger import logger
 from app.safety.enums import RecommendedAction, SafetyReasonCode, SafetyState
 from app.safety.rules import (
     CONCERN_PATTERNS,
+    CONCERN_NEGATION_PATTERNS,
     HIGH_RISK_PATTERNS,
     NEGATION_PATTERNS,
     THIRD_PARTY_MEDIA_PATTERNS,
@@ -27,7 +31,13 @@ def evaluate_message(message: str) -> SafetyResult:
             recommended_action=RecommendedAction.NORMAL_CONVERSATION,
         )
 
-    clean_message = message.strip()
+    clean_message = unicodedata.normalize("NFKC", message)
+    clean_message = clean_message.translate(str.maketrans({
+        "\u2019": "'",
+        "\u2018": "'",
+        "\u02bc": "'",
+    }))
+    clean_message = re.sub(r"\s+", " ", clean_message).strip()
 
     # 1. Check Negations
     is_negated = any(pattern.search(clean_message) for pattern in NEGATION_PATTERNS)
@@ -37,10 +47,17 @@ def evaluate_message(message: str) -> SafetyResult:
 
     # 3. Check High Risk Patterns (Unless overridden by negation or third-party/media context)
     high_risk_reasons: list[SafetyReasonCode] = []
-    if not is_negated and not is_third_party_media:
-        for pattern, reason in HIGH_RISK_PATTERNS:
-            if pattern.search(clean_message):
-                high_risk_reasons.append(reason)
+    # Remove only explicitly negated phrases, not the entire message.
+    risk_text = clean_message
+
+    for pattern in NEGATION_PATTERNS:
+        risk_text = pattern.sub(" ", risk_text)
+
+    # Never suppress independent risk signals merely because
+    # friends, relatives, or media are mentioned elsewhere.
+    for pattern, reason in HIGH_RISK_PATTERNS:
+        if pattern.search(risk_text):
+            high_risk_reasons.append(reason)
 
     if high_risk_reasons:
         result = SafetyResult(
@@ -55,9 +72,16 @@ def evaluate_message(message: str) -> SafetyResult:
         return result
 
     # 4. Check Concern Patterns
+    concern_text = clean_message
+
+    # Remove explicitly negated concern phrases only.
+    # Independent distress and crisis signals remain intact.
+    for pattern in CONCERN_NEGATION_PATTERNS:
+        concern_text = pattern.sub(" ", concern_text)
+
     concern_reasons: list[SafetyReasonCode] = []
     for pattern, reason in CONCERN_PATTERNS:
-        if pattern.search(clean_message):
+        if pattern.search(concern_text):
             concern_reasons.append(reason)
 
     if concern_reasons:

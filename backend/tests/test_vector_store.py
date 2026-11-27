@@ -11,6 +11,12 @@ def mock_qdrant_client():
     """Mock Qdrant client for offline unit testing."""
     client = MagicMock()
     client.collection_exists.return_value = True
+    client.get_collection.return_value.config.params.vectors = (
+        qmodels.VectorParams(
+            size=128,
+            distance=qmodels.Distance.COSINE,
+        )
+    )
     client.get_collections.return_value = MagicMock(collections=[MagicMock(name="voca_mind_knowledge")])
     return client
 
@@ -85,7 +91,7 @@ def test_dimension_mismatch_rejection(mock_qdrant_client):
 
 
 def test_similarity_search(mock_qdrant_client):
-    """Test similarity search executes client.search and formats ranked results."""
+    """Test similarity search executes client.query_points and formats ranked results."""
     chunk = create_sample_chunk("doc-01_c000")
     payload = {
         "document_id": chunk.document_id,
@@ -111,7 +117,7 @@ def test_similarity_search(mock_qdrant_client):
     mock_hit.score = 0.92
     mock_hit.payload = payload
 
-    mock_qdrant_client.search.return_value = [mock_hit]
+    mock_qdrant_client.query_points.return_value.points = [mock_hit]
 
     store = QdrantVectorStore(client=mock_qdrant_client, dimension=128)
     query_vec = [0.1] * 128

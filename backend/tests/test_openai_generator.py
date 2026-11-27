@@ -305,7 +305,9 @@ async def test_orchestrator_integration_high_risk_bypasses_openai(mock_openai_cl
     assert response.safety_result.state == SafetyState.HIGH_RISK
     assert response.safety_result.recommended_action == RecommendedAction.IMMEDIATE_HUMAN_EMERGENCY_SUPPORT
     assert response.sources == []
-    assert "988" in response.response_text
+    assert "112" in response.response_text
+    assert "14416" in response.response_text
+    assert "findahelpline.com" in response.response_text
 
     # Provider and retrieval must NEVER be called
     mock_openai_client.chat.completions.create.assert_not_called()

@@ -1,3 +1,18 @@
+import os
+import tempfile
+
+# Isolate knowledge storage before importing application modules.
+_test_knowledge_storage = tempfile.TemporaryDirectory(
+    prefix="voca-test-qdrant-"
+)
+
+os.environ["QDRANT_MODE"] = "local"
+os.environ["QDRANT_LOCAL_PATH"] = _test_knowledge_storage.name
+os.environ["QDRANT_COLLECTION_NAME"] = "voca_test_knowledge"
+os.environ["QDRANT_API_KEY"] = ""
+os.environ["EMBEDDING_PROVIDER"] = "fake"
+os.environ["EMBEDDING_DIMENSION"] = "1536"
+
 from typing import AsyncGenerator
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -90,6 +105,14 @@ async def auth_client_user1() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     headers = {"Authorization": "Bearer user-1-token"}
     async with AsyncClient(transport=transport, base_url="http://test", headers=headers) as ac:
+        response = await ac.post(
+            "/api/v1/auth/register/client",
+            json={
+                "display_name": "Test Client 1",
+                "date_of_birth": "2003-01-15",
+            },
+        )
+        assert response.status_code == 201, response.text
         yield ac
 
 
@@ -99,4 +122,113 @@ async def auth_client_user2() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     headers = {"Authorization": "Bearer user-2-token"}
     async with AsyncClient(transport=transport, base_url="http://test", headers=headers) as ac:
+        response = await ac.post(
+            "/api/v1/auth/register/client",
+            json={
+                "display_name": "Test Client 2",
+                "date_of_birth": "2003-01-15",
+            },
+        )
+        assert response.status_code == 201, response.text
         yield ac
+
+
+@pytest_asyncio.fixture(scope="session", loop_scope="session", autouse=True)
+async def cleanup_test_knowledge_storage():
+    yield
+    from app.knowledge.client_manager import close_local_qdrant_client
+    from app.knowledge.operation_executor import (
+        run_knowledge_operation,
+        shutdown_knowledge_executor,
+    )
+
+    try:
+        await run_knowledge_operation(
+            close_local_qdrant_client
+        )
+    finally:
+        shutdown_knowledge_executor()
+        _test_knowledge_storage.cleanup()
+
+
+import pytest
+
+
+@pytest.fixture
+def signed_test_approval(tmp_path, monkeypatch):
+    import base64
+    import json
+    from datetime import datetime, timezone
+
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+        Ed25519PrivateKey,
+    )
+
+    from app.knowledge.approval import (
+        DocumentApproval,
+        document_fingerprint,
+        chunk_fingerprint,
+    )
+
+    from app.knowledge.secure_approval_loader import (
+        load_secure_approval_registry,
+    )
+
+    private_key = Ed25519PrivateKey.generate()
+
+    public_key = base64.b64encode(
+        private_key.public_key().public_bytes_raw()
+    ).decode()
+
+    manifest = tmp_path / "approvals.json"
+    signature = tmp_path / "approvals.sig"
+
+    def configure(doc, chunks, status="APPROVED"):
+        approval = DocumentApproval(
+            document_id=doc.document_id,
+            version=doc.version,
+            fingerprint=document_fingerprint(doc),
+            chunk_fingerprints=tuple(
+                chunk_fingerprint(chunk)
+                for chunk in chunks
+            ),
+            reviewer_id="synthetic-test-reviewer",
+            approved_at=datetime.now(timezone.utc),
+            status=status,
+        )
+
+        content = json.dumps({
+            "schema_version": 1,
+            "approvals": [
+                approval.model_dump(mode="json")
+            ],
+        }).encode("utf-8")
+
+        manifest.write_bytes(content)
+
+        signature.write_text(
+            base64.b64encode(
+                private_key.sign(content)
+            ).decode()
+        )
+
+        def load_registry():
+            return load_secure_approval_registry(
+                manifest,
+                signature,
+                public_key,
+            )
+
+        monkeypatch.setattr(
+            "app.knowledge.ingestion.load_secure_approval_registry",
+            load_registry,
+        )
+
+        monkeypatch.setattr(
+            "app.knowledge.retrieval.load_secure_approval_registry",
+            load_registry,
+        )
+
+        return load_registry()
+
+    return configure

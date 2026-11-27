@@ -5,6 +5,7 @@ from app.services.conversation_orchestrator import (
     RetrievalProtocol,
 )
 from app.services.conversation_service import ConversationService
+from app.services.guardian_service import GuardianService
 from app.services.orchestrator_factory import (
     get_orchestrator,
     get_response_generator,
@@ -14,6 +15,7 @@ from app.services.orchestrator_factory import (
 
 __all__ = [
     "ConversationService",
+    "GuardianService",
     "ConversationOrchestrator",
     "DeterministicFakeResponseGenerator",
     "ResponseGeneratorProtocol",

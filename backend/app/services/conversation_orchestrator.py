@@ -1,7 +1,10 @@
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 from app.knowledge.schemas import KnowledgeChunk
 from app.logger import logger
+from app.safety.conversation_safety import evaluate_conversation
 from app.safety.engine import evaluate_message
+from app.safety.check_in import enforce_safety_check_in
+from app.safety.crisis_resources import get_crisis_resources
 from app.safety.enums import RecommendedAction, SafetyState
 from app.safety.output_validator import validate_response_safety
 from app.safety.schemas import SafetyResult
@@ -13,13 +16,51 @@ from app.schemas.orchestrator import (
 
 # Standardized safety and fallback responses
 DEFAULT_CRISIS_SAFETY_RESPONSE = (
-    "I hear how much pain you are experiencing right now, and I want you to be safe. "
-    "Because I am an automated wellness system, I cannot provide crisis intervention or emergency medical care. "
-    "Please connect with human emergency support or a crisis helpline immediately:\n\n"
-    "• International Support: Visit https://findahelpline.com or https://befrienders.org to find free, confidential crisis hotlines in your country.\n"
-    "• Regional Crisis Lines: In the US/Canada, call or text 988 (Suicide & Crisis Lifeline); text HOME to 741741 for the Crisis Text Line; in the UK, call 111 or 999; in the EU, call 112.\n"
-    "• Local Emergency Services: Crisis numbers differ by region. Please contact your local emergency services or visit the nearest emergency medical facility.\n\n"
-    "You do not have to carry this alone—please reach out to one of these resources or a trusted professional right away."
+    "I hear how much pain you are experiencing, "
+    "and your safety matters. "
+    "Are you in immediate danger or worried that "
+    "you might hurt yourself? "
+    "If you might act on these thoughts or have already "
+    "hurt yourself, please seek emergency assistance now. "
+    "If possible, stay with someone you trust and move "
+    "away from anything you could use to hurt yourself. "
+    "I can listen, but I cannot provide emergency care "
+    "or contact emergency services for you."
+    "\n\n"
+    + get_crisis_resources()
+)
+
+
+CRISIS_FOLLOWUP_RESPONSE = (
+    "Thank you for continuing to talk with me. "
+    "I remember what you shared earlier, and I want "
+    "to check how you are doing right now. "
+    "Are you thinking about harming yourself, or are "
+    "you worried that you might not be able to stay safe? "
+    "If you might act on these thoughts or have already "
+    "hurt yourself, please contact local emergency services "
+    "or go to the nearest emergency department now. "
+    "If possible, stay with someone you trust and move away "
+    "from anything you could use to hurt yourself. "
+    "You can also find local crisis support at "
+    "https://findahelpline.com. "
+    "I can listen, but I cannot provide emergency care "
+    "or contact emergency services for you."
+    "\n\n"
+    + get_crisis_resources()
+)
+
+
+HUMAN_TAKEOVER_RESPONSE = (
+    "Thank you for continuing to share how you are feeling. "
+    "Your professional support session has been accepted. "
+    "You can communicate with your assigned professional "
+    "through professional messaging. "
+    "Messages here are not automatically forwarded to them. "
+    "An accepted session does not mean your professional "
+    "is currently online or able to respond immediately. "
+    "You can choose to end the takeover and return to "
+    "ordinary AI conversation whenever you wish."
 )
 
 
@@ -28,6 +69,52 @@ SAFE_FALLBACK_RESPONSE = (
     "prescribe medications, or advise on altering medical treatments. "
     "Please consult a licensed doctor, psychiatrist, or healthcare professional for individualized medical guidance."
 )
+
+CONCERN_FALLBACK_RESPONSE = (
+    "What you are going through matters. "
+    "I am having difficulty responding properly right now, "
+    "but I want to check whether you are feeling safe. "
+    "If you feel unable to stay safe, please contact "
+    "local emergency services or seek immediate human support. "
+    "You can also reach out to a qualified mental health professional."
+    "\n\n"
+    + get_crisis_resources()
+)
+
+
+BOUNDARY_FALLBACK_RESPONSES = {
+    "EMOTIONAL_DEPENDENCY": (
+        "I am here to listen and support you. "
+        "You deserve understanding and meaningful connections "
+        "both here and outside this conversation."
+    ),
+    "FALSE_CONFIDENTIALITY": (
+        "You can choose what you feel comfortable sharing. "
+        "I cannot guarantee absolute confidentiality. "
+        "Please avoid sharing unnecessary sensitive information."
+    ),
+    "FALSE_INTERVENTION": (
+        "I cannot contact a doctor or emergency services for you. "
+        "If you need immediate assistance, please contact "
+        "local emergency services directly."
+    ),
+    "DISCOURAGING_HUMAN_SUPPORT": (
+        "Your feelings matter. I can listen and support you, "
+        "and seeking help from a qualified professional "
+        "is also a valid option."
+    ),
+    "HARM_ENCOURAGEMENT": (
+        "You deserve kindness and support. "
+        "Are you feeling safe right now? "
+        "If you might hurt yourself, please contact "
+        "local emergency services or seek immediate human support."
+    ),
+    "EMPTY": (
+        "I am sorry I could not respond properly. "
+        "You are welcome to continue sharing."
+    ),
+}
+
 
 GENERATOR_ERROR_FALLBACK = (
     "I am here to support you, but I encountered a technical issue while generating a response. "
@@ -163,7 +250,7 @@ class ConversationOrchestrator:
         )
 
         # Step 1: Run deterministic Safety Engine on incoming user message
-        safety_result: SafetyResult = evaluate_message(clean_message)
+        safety_result: SafetyResult = evaluate_conversation(clean_message, request.conversation_history)
 
         # Step 2: Intercept HIGH_RISK or IMMEDIATE_HUMAN_EMERGENCY_SUPPORT
         if (
@@ -176,10 +263,30 @@ class ConversationOrchestrator:
             )
             # Immediate diversion: bypass retrieval and ordinary response generation
             return OrchestrationResponse(
-                response_text=self.crisis_safety_response,
+                response_text=(
+                    self.crisis_safety_response
+                    if evaluate_message(clean_message).state
+                    == SafetyState.HIGH_RISK
+                    else CRISIS_FOLLOWUP_RESPONSE
+                ),
                 safety_result=safety_result,
                 sources=[],
                 is_safety_diverted=True,
+                fallback_triggered=False,
+                fallback_reason=None,
+            )
+
+        # Human takeover never overrides crisis interception.
+        if request.human_takeover_active:
+            return OrchestrationResponse(
+                response_text=enforce_safety_check_in(
+                    HUMAN_TAKEOVER_RESPONSE,
+                    safety_result,
+                ),
+                safety_result=safety_result,
+                sources=[],
+                is_safety_diverted=False,
+                is_human_takeover=True,
                 fallback_triggered=False,
                 fallback_reason=None,
             )
@@ -206,7 +313,7 @@ class ConversationOrchestrator:
                 retrieved_chunks = []
                 sources = []
 
-        # Step 4: Generate dialogue response via injected generator
+                # Step 4: Generate dialogue response via injected generator
         try:
             raw_generated_text = await self.response_generator.generate_response(
                 message=clean_message,
@@ -214,13 +321,24 @@ class ConversationOrchestrator:
                 context={
                     "safety_state": safety_result.state.value,
                     "recommended_action": safety_result.recommended_action.value,
+                    "conversation_history": [
+                        {
+                            "role": item.role,
+                            "content": item.content,
+                        }
+                        for item in request.conversation_history
+                    ],
                 },
             )
             logger.info(f"Response generated successfully: length={len(raw_generated_text)}")
         except Exception as exc:
             logger.error(f"Response generator error: error_type={type(exc).__name__}")
             return OrchestrationResponse(
-                response_text=self.generator_error_fallback,
+                response_text=(
+                    CONCERN_FALLBACK_RESPONSE
+                    if safety_result.state == SafetyState.CONCERN
+                    else self.generator_error_fallback
+                ),
                 safety_result=safety_result,
                 sources=[],
                 is_safety_diverted=False,
@@ -236,7 +354,14 @@ class ConversationOrchestrator:
                 f"violation={validation.violation_type}"
             )
             return OrchestrationResponse(
-                response_text=self.safe_fallback_response,
+                response_text=(
+                    CONCERN_FALLBACK_RESPONSE
+                    if safety_result.state == SafetyState.CONCERN
+                    else BOUNDARY_FALLBACK_RESPONSES.get(
+                        validation.violation_type,
+                        self.safe_fallback_response,
+                    )
+                ),
                 safety_result=safety_result,
                 sources=[],
                 is_safety_diverted=False,
@@ -246,7 +371,10 @@ class ConversationOrchestrator:
 
         # Step 6: Return validated response with preserved provenance
         return OrchestrationResponse(
-            response_text=raw_generated_text,
+            response_text=enforce_safety_check_in(
+                raw_generated_text,
+                safety_result,
+            ),
             safety_result=safety_result,
             sources=sources,
             is_safety_diverted=False,

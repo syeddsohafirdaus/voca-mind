@@ -10,7 +10,8 @@ from app.config import settings
 # Create async engine with connection pooling options
 engine: AsyncEngine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.ENVIRONMENT == "development",
+    echo=False,
+    hide_parameters=True,
     future=True,
     pool_pre_ping=True,
 )

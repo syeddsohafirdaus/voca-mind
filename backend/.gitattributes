@@ -1,0 +1,4 @@
+
+# Preserve signed knowledge manifest bytes
+/app/knowledge/data/approvals.json -text
+/app/knowledge/data/approvals.sig -text

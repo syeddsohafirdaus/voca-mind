@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from typing import List, Optional, Tuple
 from pydantic import BaseModel, ConfigDict, Field
 from app.safety.engine import evaluate_message
@@ -83,6 +84,39 @@ PRESCRIPTIVE_PATTERNS: List[re.Pattern] = [
 
 
 
+
+BOUNDARY_PATTERNS = {
+    "EMOTIONAL_DEPENDENCY": [
+        r"\byou (only need me|need only me)\b",
+        r"\bi am the only one who understands you\b",
+        r"\byou do not need anyone else\b",
+        r"\byou don't need anyone else\b",
+        r"\byou belong to me\b",
+    ],
+    "FALSE_CONFIDENTIALITY": [
+        r"\b(100%|completely|absolutely) confidential\b",
+        r"\bnobody will ever see (your|our) (messages|conversations)\b",
+        r"\bi guarantee (your|complete) privacy\b",
+    ],
+    "FALSE_INTERVENTION": [
+        r"\bi (have |already )?(notified|contacted|alerted) (your |a |the )?(doctor|therapist|guardian|emergency services|police)\b",
+        r"\bemergency (help|assistance) is on the way\b",
+        r"\ba doctor has been assigned to you\b",
+    ],
+    "DISCOURAGING_HUMAN_SUPPORT": [
+        r"\byou (don't|do not) need (a |your )?(doctor|therapist|psychiatrist)\b",
+        r"\b(stop|avoid) seeing your (doctor|therapist|psychiatrist)\b",
+        r"\bnever talk to (your )?(friends|family|doctor)\b",
+        r"\bkeep this secret from your (doctor|therapist)\b",
+    ],
+    "HARM_ENCOURAGEMENT": [
+        r"\byou should (hurt|harm|kill) yourself\b",
+        r"\byou deserve to (die|suffer)\b",
+        r"\bthe world would be better without you\b",
+    ],
+}
+
+
 def validate_response_safety(response_text: str) -> ResponseValidationResult:
     """Validates an assistant-generated response against safety rules and clinical non-diagnostic boundaries.
 
@@ -101,7 +135,9 @@ def validate_response_safety(response_text: str) -> ResponseValidationResult:
             violation_type="EMPTY",
         )
 
-    clean_text = response_text.strip()
+    clean_text = unicodedata.normalize("NFKC", response_text)
+    clean_text = clean_text.replace("\u2019", "'").replace("\u2018", "'")
+    clean_text = re.sub(r"\s+", " ", clean_text).strip()
 
     # 1. Check against the Safety Engine for crisis or self-harm content
     safety_eval = evaluate_message(clean_text)
@@ -132,6 +168,16 @@ def validate_response_safety(response_text: str) -> ResponseValidationResult:
                 reasons=["MEDICATION_PRESCRIPTION_DETECTED"],
                 violation_type="MEDICATION_PRESCRIPTION",
             )
+
+    # Additional emotional and ethical boundary checks
+    for category, patterns in BOUNDARY_PATTERNS.items():
+        for pattern in patterns:
+            if re.search(pattern, clean_text, re.IGNORECASE):
+                return ResponseValidationResult(
+                    is_safe=False,
+                    reasons=[category + "_DETECTED"],
+                    violation_type=category,
+                )
 
     return ResponseValidationResult(
         is_safe=True,

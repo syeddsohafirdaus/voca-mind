@@ -5,6 +5,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.schemas.orchestrator import SourceProvenance
 
 
+from app.safety.support_offer import SupportOffer
+
+
 class MessageCreate(BaseModel):
     """Schema for submitting a message to a conversation.
 
@@ -34,6 +37,8 @@ class MessageCreate(BaseModel):
 class MessageResponse(BaseModel):
     """Schema for message API responses."""
 
+    support_offer: SupportOffer | None = None
+
     id: UUID
     conversation_id: UUID
     role: str
@@ -51,5 +56,7 @@ class MessageResponse(BaseModel):
         default=False,
         description="Whether the turn bypassed ordinary generation to provide immediate crisis resources."
     )
+
+    is_human_takeover: bool = False
 
     model_config = ConfigDict(from_attributes=True)

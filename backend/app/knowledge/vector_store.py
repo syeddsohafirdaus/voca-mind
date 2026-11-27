@@ -5,6 +5,7 @@ from qdrant_client.http import models as qmodels
 
 from app.config import settings
 from app.knowledge.collection import ensure_collection
+from app.knowledge.client_manager import get_local_qdrant_client
 from app.knowledge.schemas import ChunkMetadata, KnowledgeChunk, SourceType
 from app.logger import logger
 
@@ -34,8 +35,17 @@ class QdrantVectorStore:
 
         if client is not None:
             self.client = client
+        elif settings.QDRANT_MODE.strip().lower() == "local":
+            self.client = get_local_qdrant_client()
+        elif settings.QDRANT_MODE.strip().lower() == "remote":
+            self.client = QdrantClient(
+                url=self.url,
+                api_key=self.api_key,
+            )
         else:
-            self.client = QdrantClient(url=self.url, api_key=self.api_key)
+            raise ValueError(
+                "Unsupported QDRANT_MODE."
+            )
 
     def initialize(self) -> bool:
         """Ensures Qdrant collection exists with proper dimensions and metrics."""
@@ -64,6 +74,11 @@ class QdrantVectorStore:
             raise ValueError(f"Chunks count ({len(chunks)}) must match vectors count ({len(vectors)}).")
         if not chunks:
             return 0
+
+        if any(chunk.metadata.reviewed is not True for chunk in chunks):
+            raise ValueError(
+                "Unreviewed knowledge chunks cannot be stored."
+            )
 
         self.initialize()
         points = []
@@ -133,17 +148,30 @@ class QdrantVectorStore:
 
         self.initialize()
 
-        search_results = self.client.search(
+        search_results = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             limit=top_k,
             score_threshold=score_threshold if score_threshold > 0.0 else None,
-        )
+            query_filter=qmodels.Filter(
+                must=[
+                    qmodels.FieldCondition(
+                        key="reviewed",
+                        match=qmodels.MatchValue(value=True),
+                    )
+                ]
+            ),
+            with_payload=True,
+        ).points
 
         results: List[Dict[str, Any]] = []
 
         for hit in search_results:
             payload = hit.payload or {}
+
+            if payload.get("reviewed") is not True:
+                continue
+
             score = float(hit.score)
 
             metadata = ChunkMetadata(
@@ -151,6 +179,8 @@ class QdrantVectorStore:
                 publisher=payload.get("publisher", "Unknown Publisher"),
                 version=payload.get("version", "1.0"),
                 reviewed=payload.get("reviewed", False),
+                publication_date=payload.get("publication_date"),
+                last_reviewed_date=payload.get("last_reviewed_date"),
                 total_chunks=payload.get("total_chunks", 1),
                 start_char=payload.get("start_char", 0),
                 end_char=payload.get("end_char", len(payload.get("text", ""))),

@@ -52,7 +52,7 @@ Millions of individuals experience daily stress, anxiety, emotional burnout, lon
 | **Backend API** | Python 3.11+, FastAPI (`voca_mind` package) |
 | **Database & ORM** | PostgreSQL, SQLAlchemy (Async), Alembic |
 | **Vector DB (RAG)** | Qdrant |
-| **AI Orchestration** | OpenAI API (LLM & Embeddings) |
+| **AI Orchestration** | Ollama / Qwen and Nomic embeddings; OpenAI integration available |
 | **Authentication** | Firebase Authentication |
 | **NFC Hardware** | NTAG213 Tags |
 | **Containerization** | Docker & Docker Compose |
@@ -104,31 +104,46 @@ voca-mind/
 
 ---
 
-## 📊 Development Status
+## Development Status
 
-Current Phase: **Phase 1: Architecture and Documentation**
+**Local engineering prototype**
 
-| Phase | Description | Status |
-| :---: | :--- | :---: |
-| **Phase 1** | Architecture & Documentation | 🔄 In Progress |
-| **Phase 2** | Backend Foundation (`voca_mind`) | ⏳ Pending |
-| **Phase 3** | Database & Migrations | ⏳ Pending |
-| **Phase 4** | Authentication Setup | ⏳ Pending |
-| **Phase 5** | Basic AI Conversation | ⏳ Pending |
-| **Phase 6** | Short-Term Memory | ⏳ Pending |
-| **Phase 7** | Knowledge RAG System | ⏳ Pending |
-| **Phase 8** | Daily Conversation Summaries | ⏳ Pending |
-| **Phase 9** | User-Controlled Long-Term Memory | ⏳ Pending |
-| **Phase 10** | Independent Safety Subsystem | ⏳ Pending |
-| **Phase 11** | Speech-to-Text Integration | ⏳ Pending |
-| **Phase 12** | Text-to-Speech Integration | ⏳ Pending |
-| **Phase 13** | Flutter Mobile Application | ⏳ Pending |
-| **Phase 14** | NFC Tag Integration | ⏳ Pending |
-| **Phase 15** | Professional / Counsellor Portal | ⏳ Pending |
-| **Phase 16** | Consent & Audit System | ⏳ Pending |
-| **Phase 17** | Comprehensive Testing | ⏳ Pending |
-| **Phase 18** | Security & Privacy Review | ⏳ Pending |
-| **Phase 19** | Production Deployment | ⏳ Pending |
+| Component | Status |
+|---|---|
+| Backend foundation | Implemented |
+| PostgreSQL and migrations | Implemented |
+| Firebase authentication | Implemented |
+| AI conversation | Implemented |
+| Conversation history | Implemented |
+| Safety-aware routing | Implemented |
+| Knowledge retrieval architecture | Implemented |
+| Speech-to-text | Implemented |
+| Text-to-speech | Implemented |
+| Flutter Android application | Implemented |
+| Professional verification | Implemented |
+| Professional assignments | Implemented |
+| Professional messaging | Implemented |
+| Human takeover | Implemented |
+| Guardian authorization | Implemented |
+| Consent-based wellbeing sharing | Implemented |
+| In-app notifications | Implemented |
+| AI professional support suggestions | Implemented |
+| Daily summaries and long-term memory | Not verified |
+| NFC integration | Not verified |
+| iOS build | Not verified |
+| Production deployment | Pending |
+
+### Verification Results
+
+- Backend automated tests: 569 passed.
+- Flutter automated tests: 12 passed.
+- Total automated tests: 581 passed.
+- Flutter static analysis: no issues.
+- Android debug APK: built successfully.
+- Database schema: migration 015, no pending schema changes.
+
+Full authenticated mobile workflow verification, production
+security testing and independent clinical validation remain pending.
 
 ---
 
@@ -146,3 +161,20 @@ For detailed architectural and design specifications, please refer to the docume
 - [API Design Specification](docs/api-design.md)
 - [Development Plan](docs/development-plan.md)
 
+
+
+## Implementation Documentation
+
+- [System implementation and architecture](docs/IMPLEMENTATION.md)
+- [Security and privacy guidelines](docs/SECURITY.md)
+- [Testing and verification](docs/TESTING.md)
+
+### Development Status
+
+Voca Mind includes a FastAPI backend and Flutter Android
+application with AI conversation, voice interaction,
+professional support, guardian authorization, consent-based
+wellbeing sharing, human takeover, and in-app notifications.
+
+The application is a local engineering prototype.
+Production security and clinical validation remain pending.

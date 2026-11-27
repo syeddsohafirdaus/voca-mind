@@ -56,3 +56,21 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+# Android Studio and local configuration
+.idea/
+*.iml
+local.properties
+frontend/android/app/google-services.json
+
+.env.backup
+
+# Additional security exclusions
+*.dump
+*.jks
+*.keystore
+*.apk
+*.aab
+*service-account*.json
+*service_account*.json
+key.properties

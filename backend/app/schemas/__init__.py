@@ -5,6 +5,12 @@ from app.schemas.orchestrator import (
     OrchestrationResponse,
     SourceProvenance,
 )
+from app.schemas.guardian import (
+    GrantGuardianAuthorizationRequest,
+    GuardianAuthorizationCreate,
+    GuardianAuthorizationResponse,
+    GuardianSummary,
+)
 
 __all__ = [
     "ConversationCreate",
@@ -14,4 +20,8 @@ __all__ = [
     "OrchestrationRequest",
     "OrchestrationResponse",
     "SourceProvenance",
+    "GrantGuardianAuthorizationRequest",
+    "GuardianAuthorizationCreate",
+    "GuardianAuthorizationResponse",
+    "GuardianSummary",
 ]
