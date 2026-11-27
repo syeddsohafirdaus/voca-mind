@@ -1,4 +1,5 @@
 import time
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -6,7 +7,32 @@ from app.api import api_router
 from app.config import settings
 from app.logger import logger
 
+from app.knowledge.client_manager import close_local_qdrant_client
+from app.knowledge.operation_executor import (
+    run_knowledge_operation,
+    shutdown_knowledge_executor,
+)
+from app.services.orchestrator_factory import reset_orchestrator_factory_cache
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application resources."""
+    logger.info("Voca-Mind backend starting.")
+
+    try:
+        yield
+    finally:
+        reset_orchestrator_factory_cache()
+        try:
+            await run_knowledge_operation(close_local_qdrant_client)
+        finally:
+            shutdown_knowledge_executor()
+        logger.info("Voca-Mind backend resources released.")
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="Voca Mind API",
     description="Voice-based AI Emotional-Support Companion Backend API",
     version="0.1.0",

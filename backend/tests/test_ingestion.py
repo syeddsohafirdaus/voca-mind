@@ -23,7 +23,7 @@ def sample_document():
 
 
 @pytest.mark.asyncio
-async def test_full_ingestion_pipeline_success(sample_document):
+async def test_full_ingestion_pipeline_success(sample_document, signed_test_approval):
     """Test full ingestion pipeline validates, chunks, embeds, and upserts knowledge document."""
     fake_embedding = DeterministicFakeEmbeddingService(dimension=64)
     mock_vector_store = MagicMock(spec=QdrantVectorStore)
@@ -32,6 +32,17 @@ async def test_full_ingestion_pipeline_success(sample_document):
     pipeline = KnowledgeIngestionPipeline(
         vector_store=mock_vector_store,
         embedding_service=fake_embedding,
+    )
+
+    from app.knowledge.service import chunk_document
+
+    signed_test_approval(
+        sample_document,
+        chunk_document(
+            sample_document,
+            max_chunk_size=200,
+            overlap=20,
+        ),
     )
 
     result = await pipeline.ingest_document(sample_document, max_chunk_size=200, overlap=20)

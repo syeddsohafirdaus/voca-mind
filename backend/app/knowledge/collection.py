@@ -27,7 +27,34 @@ def ensure_collection(
             exists = any(c.name == collection_name for c in collections)
 
         if exists:
-            logger.info(f"Qdrant collection '{collection_name}' already exists.")
+            info = client.get_collection(collection_name)
+            vectors = info.config.params.vectors
+
+            if not isinstance(vectors, qmodels.VectorParams):
+                raise ValueError(
+                    "Unsupported collection vector configuration."
+                )
+
+            if vectors.size != dimension:
+                raise ValueError(
+                    f"Collection dimension mismatch: "
+                    f"expected {dimension}, found {vectors.size}."
+                )
+
+            expected_distance = (
+                qmodels.Distance.COSINE
+                if distance.lower() == "cosine"
+                else qmodels.Distance.DOT
+            )
+
+            if vectors.distance != expected_distance:
+                raise ValueError(
+                    "Collection distance metric mismatch."
+                )
+
+            logger.info(
+                f"Qdrant collection '{collection_name}' validated."
+            )
             return True
 
         # Determine distance enum

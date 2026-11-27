@@ -3,6 +3,8 @@ from app.config import settings
 from app.knowledge.embeddings import BaseEmbeddingService, get_embedding_service
 from app.knowledge.schemas import KnowledgeChunk
 from app.knowledge.vector_store import QdrantVectorStore
+from app.knowledge.operation_executor import run_knowledge_operation
+from app.knowledge.secure_approval_loader import load_secure_approval_registry
 
 
 class KnowledgeRetrievalService:
@@ -21,12 +23,13 @@ class KnowledgeRetrievalService:
         vector_store: Optional[QdrantVectorStore] = None,
         embedding_service: Optional[BaseEmbeddingService] = None,
     ) -> None:
-        self.embedding_service = (
-            embedding_service if embedding_service is not None else get_embedding_service()
-        )
-        self.vector_store = (
-            vector_store if vector_store is not None else QdrantVectorStore()
-        )
+        self.embedding_service = embedding_service
+        self.vector_store = vector_store
+
+    def _get_vector_store(self):
+        if self.vector_store is None:
+            self.vector_store = QdrantVectorStore()
+        return self.vector_store
 
     async def retrieve_relevant_chunks(
         self,
@@ -51,14 +54,27 @@ class KnowledgeRetrievalService:
 
         clean_query = query.strip()
 
+        registry = load_secure_approval_registry()
+
         # Step 1: Embed query text
+        if self.embedding_service is None:
+            self.embedding_service = get_embedding_service()
+
         query_vector = await self.embedding_service.embed_text(clean_query)
 
         # Step 2: Search Qdrant vector store
-        results = self.vector_store.search_similarity(
-            query_vector=query_vector,
-            top_k=top_k,
-            score_threshold=score_threshold,
-        )
+        def search():
+            return self._get_vector_store().search_similarity(
+                query_vector=query_vector,
+                top_k=top_k,
+                score_threshold=score_threshold,
+            )
 
-        return results
+        results = await run_knowledge_operation(search)
+
+        return [
+            result for result in results
+            if isinstance(result.get("chunk"), KnowledgeChunk)
+            and result["chunk"].metadata.reviewed is True
+            and registry.is_chunk_approved(result["chunk"])
+        ]

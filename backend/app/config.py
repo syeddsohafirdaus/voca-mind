@@ -20,6 +20,17 @@ class Settings(BaseSettings):
     QDRANT_COLLECTION_NAME: str = "voca_mind_knowledge"
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_DIMENSION: int = 1536
+    EMBEDDING_PROVIDER: str = "auto"
+
+    # Local embedding configuration
+    OLLAMA_EMBEDDING_MODEL: str = "nomic-embed-text"
+    OLLAMA_EMBEDDING_TIMEOUT_SECONDS: float = 120.0
+
+    # Qdrant storage configuration
+    QDRANT_MODE: str = "remote"
+    QDRANT_LOCAL_PATH: str = ""
+
+    KNOWLEDGE_APPROVAL_PUBLIC_KEY: str = ""
 
     # OpenAI
     OPENAI_API_KEY: str | None = None

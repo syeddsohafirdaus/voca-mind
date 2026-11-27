@@ -1,4 +1,7 @@
 import abc
+import asyncio
+import json
+import urllib.request
 import hashlib
 import math
 from typing import List
@@ -107,11 +110,158 @@ class OpenAIEmbeddingService(BaseEmbeddingService):
         return [item.embedding for item in response.data]
 
 
+
+class OllamaEmbeddingService(BaseEmbeddingService):
+    """Local semantic embeddings through Ollama."""
+
+    def __init__(
+        self,
+        base_url: str | None = None,
+        model: str | None = None,
+        dimension: int | None = None,
+        timeout: float | None = None,
+    ) -> None:
+        self.base_url = (
+            base_url or settings.OLLAMA_BASE_URL
+        ).rstrip("/")
+        self.model = model or settings.OLLAMA_EMBEDDING_MODEL
+        self.dimension = (
+            dimension if dimension is not None
+            else settings.EMBEDDING_DIMENSION
+        )
+        self.timeout = (
+            timeout if timeout is not None
+            else settings.OLLAMA_EMBEDDING_TIMEOUT_SECONDS
+        )
+
+    def _request_embeddings(
+        self, texts: List[str]
+    ) -> List[List[float]]:
+        payload = {
+            "model": self.model,
+            "input": texts,
+        }
+
+        request = urllib.request.Request(
+            self.base_url + "/api/embed",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        with urllib.request.urlopen(
+            request, timeout=self.timeout
+        ) as response:
+            result = json.load(response)
+
+        vectors = result.get("embeddings")
+
+        if not isinstance(vectors, list):
+            raise ValueError("Invalid Ollama embedding response.")
+
+        if len(vectors) != len(texts):
+            raise ValueError("Embedding count mismatch.")
+
+        for vector in vectors:
+            if not isinstance(vector, list):
+                raise ValueError("Invalid embedding vector.")
+
+            if len(vector) != self.dimension:
+                raise ValueError("Embedding dimension mismatch.")
+
+            if not all(
+                isinstance(value, (int, float))
+                and math.isfinite(value)
+                for value in vector
+            ):
+                raise ValueError("Invalid embedding values.")
+
+        return vectors
+
+    async def embed_text(self, text: str) -> List[float]:
+        clean_text = self.validate_text(text)
+
+        vectors = await asyncio.to_thread(
+            self._request_embeddings,
+            ["search_query: " + clean_text],
+        )
+
+        return vectors[0]
+
+    async def embed_batch(
+        self, texts: List[str]
+    ) -> List[List[float]]:
+        if not texts:
+            return []
+
+        clean_texts = [
+            "search_document: " + self.validate_text(text)
+            for text in texts
+        ]
+
+        return await asyncio.to_thread(
+            self._request_embeddings,
+            clean_texts,
+        )
+
+
 def get_embedding_service(
     force_fake: bool = False,
     api_key: str | None = None,
 ) -> BaseEmbeddingService:
-    """Factory function returning active embedding service instance."""
-    if force_fake or not api_key:
-        return DeterministicFakeEmbeddingService(dimension=settings.EMBEDDING_DIMENSION)
-    return OpenAIEmbeddingService(api_key=api_key, model=settings.EMBEDDING_MODEL)
+    """Return the configured embedding provider."""
+
+    provider = settings.EMBEDDING_PROVIDER.strip().lower()
+
+    if force_fake:
+        return DeterministicFakeEmbeddingService(
+            dimension=settings.EMBEDDING_DIMENSION
+        )
+
+    if provider == "ollama":
+        return OllamaEmbeddingService()
+
+    if provider == "fake":
+        if settings.ENVIRONMENT == "production":
+            raise RuntimeError(
+                "Fake embeddings are not allowed in production."
+            )
+
+        return DeterministicFakeEmbeddingService(
+            dimension=settings.EMBEDDING_DIMENSION
+        )
+
+    if provider == "openai":
+        key = api_key or settings.OPENAI_API_KEY
+
+        if not key:
+            raise RuntimeError(
+                "OpenAI embedding API key is not configured."
+            )
+
+        return OpenAIEmbeddingService(
+            api_key=key,
+            model=settings.EMBEDDING_MODEL,
+            dimension=settings.EMBEDDING_DIMENSION,
+        )
+
+    if provider == "auto":
+        if api_key:
+            return OpenAIEmbeddingService(
+                api_key=api_key,
+                model=settings.EMBEDDING_MODEL,
+                dimension=settings.EMBEDDING_DIMENSION,
+            )
+
+        if settings.ENVIRONMENT == "production":
+            raise RuntimeError(
+                "Configure a real embedding provider."
+            )
+
+        return DeterministicFakeEmbeddingService(
+            dimension=settings.EMBEDDING_DIMENSION
+        )
+
+    raise ValueError(
+        f"Unsupported embedding provider: {provider}"
+    )

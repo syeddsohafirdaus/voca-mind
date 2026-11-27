@@ -32,7 +32,7 @@ def sample_retrieved_chunk():
 
 
 @pytest.mark.asyncio
-async def test_retrieval_query_embedding_and_provenance(sample_retrieved_chunk):
+async def test_retrieval_query_embedding_and_provenance(sample_retrieved_chunk, signed_test_approval):
     """Test retrieval embeds query and returns ranked KnowledgeChunk results with preserved provenance."""
     fake_embedding = DeterministicFakeEmbeddingService(dimension=64)
     mock_vector_store = MagicMock(spec=QdrantVectorStore)
@@ -48,6 +48,29 @@ async def test_retrieval_query_embedding_and_provenance(sample_retrieved_chunk):
     retrieval_service = KnowledgeRetrievalService(
         vector_store=mock_vector_store,
         embedding_service=fake_embedding,
+    )
+
+    from app.knowledge.schemas import KnowledgeDocument
+
+    chunk = sample_retrieved_chunk
+
+    document = KnowledgeDocument(
+        document_id=chunk.document_id,
+        title=chunk.title,
+        source_name=chunk.source_name,
+        source_url=chunk.source_url,
+        source_type=chunk.metadata.source_type,
+        publisher=chunk.metadata.publisher,
+        topic=chunk.topic,
+        language=chunk.language,
+        content=chunk.text,
+        version=chunk.metadata.version,
+        reviewed=True,
+    )
+
+    signed_test_approval(
+        document,
+        [chunk],
     )
 
     query = "How to reduce stress with breathing?"
