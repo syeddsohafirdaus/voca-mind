@@ -18,6 +18,7 @@ from app.database import get_db
 from app.models.user import User
 from app.models.doctor_application import DoctorApplication
 from app.models.doctor_assignment import DoctorAssignment
+from app.models.support_request import SupportRequest
 
 
 router = APIRouter()
@@ -104,6 +105,23 @@ async def propose_assignment(
     db.add(assignment)
 
     try:
+        await db.flush()
+
+        result = await db.execute(
+            select(SupportRequest)
+            .where(
+                SupportRequest.client_id == client.id,
+                SupportRequest.status == "pending",
+            )
+            .with_for_update()
+        )
+
+        support_request = result.scalar_one_or_none()
+
+        if support_request is not None:
+            support_request.assignment_id = assignment.id
+            support_request.status = "assigned"
+
         await db.commit()
     except IntegrityError:
         await db.rollback()
@@ -156,6 +174,28 @@ async def list_doctor_assignments(
     )
 
     return result.scalars().all()
+
+
+
+async def close_linked_support_request(
+    db,
+    assignment_id,
+    final_status,
+):
+    result = await db.execute(
+        select(SupportRequest)
+        .where(
+            SupportRequest.assignment_id == assignment_id,
+            SupportRequest.status == "assigned",
+        )
+        .with_for_update()
+    )
+
+    support_request = result.scalar_one_or_none()
+
+    if support_request is not None:
+        support_request.status = final_status
+        support_request.ended_at = datetime.now(timezone.utc)
 
 
 async def get_client_assignment(db, assignment_id, client_id):
@@ -230,6 +270,12 @@ async def revoke_assignment(
     assignment.status = "revoked"
     assignment.ended_at = datetime.now(timezone.utc)
 
+    await close_linked_support_request(
+        db,
+        assignment.id,
+        "cancelled",
+    )
+
     await db.commit()
     await db.refresh(assignment)
 
@@ -267,6 +313,12 @@ async def complete_assignment(
 
     assignment.status = "completed"
     assignment.ended_at = datetime.now(timezone.utc)
+
+    await close_linked_support_request(
+        db,
+        assignment.id,
+        "closed",
+    )
 
     await db.commit()
     await db.refresh(assignment)

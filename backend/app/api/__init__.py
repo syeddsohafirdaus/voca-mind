@@ -10,6 +10,7 @@ from app.api.doctors import router as doctors_router
 from app.api.admin import router as admin_router
 from app.api.assignments import router as assignments_router
 from app.api.professional_messages import router as professional_messages_router
+from app.api.support_requests import router as support_requests_router
 
 
 api_router = APIRouter()
@@ -69,6 +70,13 @@ api_router.include_router(
     professional_messages_router,
     prefix="/professional",
     tags=["Professional Messaging"],
+)
+
+
+api_router.include_router(
+    support_requests_router,
+    prefix="/support",
+    tags=["Professional Support"],
 )
 
 

@@ -8,6 +8,7 @@ from app.models.doctor_application import DoctorApplication
 from app.models.doctor_review import DoctorReview
 from app.models.doctor_assignment import DoctorAssignment
 from app.models.professional_message import ProfessionalMessage
+from app.models.support_request import SupportRequest
 from app.models.guardian_authorization import GuardianAuthorization
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "DoctorReview",
     "DoctorAssignment",
     "ProfessionalMessage",
+    "SupportRequest",
     "GuardianAuthorization",
 ]
