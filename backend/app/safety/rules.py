@@ -59,7 +59,7 @@ CONCERN_PATTERNS: List[Tuple[re.Pattern, SafetyReasonCode]] = [
     # Unable to Cope / Severe Emotional Distress
     (
         re.compile(
-            r"\b(can't cope anymore|cannot cope anymore|can't take this pain|can't handle this anymore|everything feels overwhelming|completely overwhelmed|drowning in pain|can't go on like this)\b",
+            r"\b(can't cope anymore|cannot cope anymore|can't take this pain|can't handle this anymore|everything feels overwhelming|completely overwhelmed|drowning in pain|can't go on like this|feel like giving up on everything|feel like giving up on life|feel like nothing will ever get better|feel like there is no way forward)\b",
             re.IGNORECASE,
         ),
         SafetyReasonCode.UNABLE_TO_COPE,

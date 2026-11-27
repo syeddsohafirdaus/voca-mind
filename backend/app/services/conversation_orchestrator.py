@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 from app.knowledge.schemas import KnowledgeChunk
 from app.logger import logger
-from app.safety.engine import evaluate_message
+from app.safety.conversation_safety import evaluate_conversation
 from app.safety.enums import RecommendedAction, SafetyState
 from app.safety.output_validator import validate_response_safety
 from app.safety.schemas import SafetyResult
@@ -163,7 +163,7 @@ class ConversationOrchestrator:
         )
 
         # Step 1: Run deterministic Safety Engine on incoming user message
-        safety_result: SafetyResult = evaluate_message(clean_message)
+        safety_result: SafetyResult = evaluate_conversation(clean_message, request.conversation_history)
 
         # Step 2: Intercept HIGH_RISK or IMMEDIATE_HUMAN_EMERGENCY_SUPPORT
         if (

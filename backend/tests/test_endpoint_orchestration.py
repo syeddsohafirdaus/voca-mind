@@ -210,6 +210,7 @@ async def test_missing_api_key_fails_safely_in_production(auth_client_user1: Asy
     returning GENERATOR_ERROR_FALLBACK.
     """
     reset_orchestrator_factory_cache()
+    monkeypatch.setattr(settings, "AI_PROVIDER", "openai")
     monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
     monkeypatch.setattr(settings, "ALLOW_DEV_FAKE_GENERATOR", False)
@@ -411,3 +412,111 @@ async def test_db_failure_does_not_interfere_with_404_ownership_check(
     # Must be 404 (ownership), NOT 500 (DB error)
     assert post_res.status_code == 404
     assert post_res.json()["detail"] == "Conversation not found"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "scenario",
+    ["historical_risk", "conversation_isolation", "normal_history"],
+)
+async def test_multiturn_api_safety(
+    auth_client_user1: AsyncClient,
+    scenario,
+):
+    spy_retrieval = SpyRetrievalService()
+    spy_generator = SpyResponseGenerator()
+
+    saved_overrides = dict(app.dependency_overrides)
+
+    app.dependency_overrides[get_retrieval_service] = (
+        lambda: spy_retrieval
+    )
+    app.dependency_overrides[get_response_generator] = (
+        lambda: spy_generator
+    )
+
+    try:
+        created = await auth_client_user1.post(
+            "/api/v1/conversations"
+        )
+        assert created.status_code == 201
+        conv_id = created.json()["id"]
+
+        first_message = (
+            "I have many assignments."
+            if scenario == "normal_history"
+            else "I want to die."
+        )
+
+        first = await auth_client_user1.post(
+            f"/api/v1/conversations/{conv_id}/messages",
+            json={
+                "role": "user",
+                "content": first_message,
+            },
+        )
+
+        assert first.status_code == 201
+        assert first.json()["is_safety_diverted"] == (
+            scenario != "normal_history"
+        )
+
+        if scenario == "conversation_isolation":
+            created = await auth_client_user1.post(
+                "/api/v1/conversations"
+            )
+            assert created.status_code == 201
+            conv_id = created.json()["id"]
+
+        followup = await auth_client_user1.post(
+            f"/api/v1/conversations/{conv_id}/messages",
+            json={
+                "role": "user",
+                "content": "I don't know what to do.",
+            },
+        )
+
+        assert followup.status_code == 201
+        data = followup.json()
+
+        if scenario == "historical_risk":
+            assert data["is_safety_diverted"] is True
+            assert data["sources"] == []
+            assert spy_retrieval.call_count == 0
+            assert spy_generator.call_count == 0
+            assert (
+                data["assistant_reply"]["content"]
+                == DEFAULT_CRISIS_SAFETY_RESPONSE
+            )
+
+        else:
+            assert data["is_safety_diverted"] is False
+
+            expected_calls = (
+                2 if scenario == "normal_history" else 1
+            )
+
+            assert spy_retrieval.call_count == expected_calls
+            assert spy_generator.call_count == expected_calls
+
+        saved = await auth_client_user1.get(
+            f"/api/v1/conversations/{conv_id}"
+        )
+
+        assert saved.status_code == 200
+
+        messages = saved.json()["messages"]
+
+        assert len(messages) == (
+            2 if scenario == "conversation_isolation" else 4
+        )
+
+        assert messages[-1]["role"] == "assistant"
+        assert (
+            messages[-1]["content"]
+            == data["assistant_reply"]["content"]
+        )
+
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(saved_overrides)

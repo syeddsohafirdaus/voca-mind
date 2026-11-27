@@ -116,3 +116,53 @@ def test_safety_edge_cases_and_formatting():
     # Punctuation variations
     punct_result = evaluate_message("I want to kill myself!!!...")
     assert punct_result.state == SafetyState.HIGH_RISK
+
+
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        (
+            "I feel like giving up on everything.",
+            SafetyState.CONCERN,
+        ),
+        (
+            "My friend ignored me and now I want to die.",
+            SafetyState.HIGH_RISK,
+        ),
+        (
+            "I don't want to die, but I can't keep myself safe.",
+            SafetyState.HIGH_RISK,
+        ),
+        (
+            "I can\u2019t keep myself safe.",
+            SafetyState.HIGH_RISK,
+        ),
+        (
+            "I don't want to die.",
+            SafetyState.LOW,
+        ),
+        (
+            "I am worried about my friend.",
+            SafetyState.LOW,
+        ),
+        (
+            "I want to give up on this assignment.",
+            SafetyState.LOW,
+        ),
+        (
+            "I want   to   die.",
+            SafetyState.HIGH_RISK,
+        ),
+    ],
+)
+def test_advanced_safety_regressions(message, expected):
+    result = evaluate_message(message)
+
+    assert result.state == expected
+
+    if expected == SafetyState.HIGH_RISK:
+        assert result.requires_human_support is True
+        assert result.requires_emergency_guidance is True
+        assert result.recommended_action == (
+            RecommendedAction.IMMEDIATE_HUMAN_EMERGENCY_SUPPORT
+        )

@@ -90,6 +90,14 @@ async def auth_client_user1() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     headers = {"Authorization": "Bearer user-1-token"}
     async with AsyncClient(transport=transport, base_url="http://test", headers=headers) as ac:
+        response = await ac.post(
+            "/api/v1/auth/register/client",
+            json={
+                "display_name": "Test Client 1",
+                "date_of_birth": "2003-01-15",
+            },
+        )
+        assert response.status_code == 201, response.text
         yield ac
 
 
@@ -99,4 +107,12 @@ async def auth_client_user2() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     headers = {"Authorization": "Bearer user-2-token"}
     async with AsyncClient(transport=transport, base_url="http://test", headers=headers) as ac:
+        response = await ac.post(
+            "/api/v1/auth/register/client",
+            json={
+                "display_name": "Test Client 2",
+                "date_of_birth": "2003-01-15",
+            },
+        )
+        assert response.status_code == 201, response.text
         yield ac
